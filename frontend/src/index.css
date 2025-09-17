@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+/* CultureX — brand colors*/
+@theme {
+  /* === Fonts === */
+  --font-ui: Inter, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-editorial: Newsreader, Georgia, "Times New Roman", Times, serif;
+
+  /* === Breakpoints (adds 3xl) === */
+  --breakpoint-3xl: 90rem; /* 1440px */
+
+  /* Core brand */
+  --text-color-ink: #0b1221;            /* primary text / dark surfaces */
+  --text-color-ink-600: #121a2f;
+  --text-color-ink-400: #2a344a;
+
+  --primary-color-royal: #3450ff;          /* primary actions, links, focus */
+  --primary-color-royal-600: #2c42d9;      /* hover */
+  --primary-color-royal-700: #2134b3;      /* active */
+
+  --color-gold: #ffb703;           /* highlights, badges */
+  --color-gold-600: #e8a002;
+  --color-gold-700: #c78802;
+
+  --secondary-color-orchid: #7a3af9;         /* secondary accents */
+  --secondary-color-orchid-600: #6931e0;
+  --secondary-color-orchid-700: #592ac8;
+
+  /* Surfaces & lines */
+  --color-background-snow: #f7f7fa;           /* app background (cool neutral) */
+  --color-ivory: #fff8f1;          /* warm surface / hero bands */
+  --border-color-line: #e6e6ea;           /* borders/dividers */
+
+  /* Convenience */
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  /* === Radius === */
+  --radius-input: 0.5rem;          /* 8px  -> class: rounded-input */
+  --radius-card: 0.75rem;          /* 12px -> class: rounded-card */
+  --radius-pill: 9999px;           /*      -> class: rounded-pill */
+
+  /* === Shadows === */
+  --shadow-card: 0 8px 24px 0 rgba(11 18 33 / 0.08); /* class: shadow-card */
+
+  /* === Easing (for transitions) === */
+  --ease-snappy: cubic-bezier(.2,0,0,1);
+  --ease-gentle: cubic-bezier(.3,0,0,1);
+}
+
+/* Semantic role aliases using other tokens, this makes it easier to change colors later if needed */
+@theme inline {
+  --color-bg: var(--color-snow);         /* class: bg-bg */
+  --color-surface: var(--color-white);   /* class: bg-surface */
+  --color-brand: var(--color-royal);     /* class: text-brand/bg-brand */
+  --color-accent: var(--color-gold);     /* class: text-accent/bg-accent */
+  --color-text: var(--color-ink);        /* class: text-text */
+}
