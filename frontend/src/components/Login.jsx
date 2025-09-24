@@ -28,7 +28,7 @@ const Login = () => {
     const result = await login(logindata);
 
     if (result.success) {
-      navigate('/profile');
+      navigate('/');
     }
   }
 
@@ -38,7 +38,7 @@ const Login = () => {
     try {
       const result = await googleAuth(token); // using authService.googleAuth to send token to backend
       if (result.success) {
-        navigate('/profile');
+        navigate('/');
       } else {
         console.log("Google auth failed:", result.error);
       }
@@ -46,17 +46,27 @@ const Login = () => {
       console.error('Google login error:', error);
     }
   };
-  
+
+  // Sometimes the Google script may load after the component mounts, so we need to check periodically
+  /* Global google - We're using the script from the index.html to handle Google Sign-In */
+  const initializeGoogleSignIn = () => {
+    if (window.google && window.google.accounts) {
+      window.google.accounts.id.initialize({
+        client_id: import.meta.env.VITE_CLIENT_ID,
+        callback: handleLoginWithGoogle
+      });
+      window.google.accounts.id.renderButton(
+        document.getElementById("google-login-button"),
+        { theme: "outline", size: "large", text:"signin_with", width: "240" , shape: "pill" }
+      );
+    } else {
+      // If Google script isn't loaded yet, wait and try again
+      setTimeout(initializeGoogleSignIn, 100);
+    }
+  };
+  // Initialize Google Sign-In when component mounts
   useEffect(() => {
-    /* Global google - We're using the script from the index.html to handle Google Sign-In */
-    google.accounts.id.initialize({
-      client_id: import.meta.env.VITE_CLIENT_ID,
-      callback: handleLoginWithGoogle
-    });
-    google.accounts.id.renderButton(
-      document.getElementById("google-login-button"),
-      { theme: "outline", size: "large", text:"signin_with", width: "240" , shape: "pill" }  // customization attributes
-    );
+    initializeGoogleSignIn();
   }, []);
 
   return (

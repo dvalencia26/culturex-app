@@ -21,7 +21,7 @@ function App() {
           } />
           <Route path="/signup" element={<Signup />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/profile" element={
+          <Route path="/profile/:handle" element={
             <ProtectedRoute>
               <Profile />
             </ProtectedRoute>

@@ -33,6 +33,7 @@ export const AuthProvider = ({ children }) => {
     }
     initializeAuth();
   }, [authInitialized]); // Watch authInitialized to prevent re-runs
+  
   const initializeAuth = async () => {
     setIsLoading(true);
     
@@ -60,29 +61,23 @@ export const AuthProvider = ({ children }) => {
   const login = async (credentials) => {
     setIsLoading(true);
     
-    try {
-      const result = await authService.login(credentials);
-      
-      if (result.success) {
-        // Fetch user data after successful login
-        const authResult = await authService.verifyAuth();
-        if (authResult.success && authResult.data.authenticated) {
-          setUser(authResult.data);
-          setIsAuthenticated(true);
-        }
-        
-        toast.success('Login successful!');
-        return { success: true };
-      } else {
-        toast.error(result.error);
-        return { success: false, error: result.error };
+    const result = await authService.login(credentials);
+    
+    if (result.success) {
+      // Fetch user data after successful login
+      const authResult = await authService.verifyAuth();
+      if (authResult.success && authResult.data.authenticated) {
+        setUser(authResult.data);
+        setIsAuthenticated(true);
       }
-    } catch (error) {
-      console.error('Login failed:', error.message);
-      toast.error('Login failed. Please try again.');
-      return { success: false, error: error.message };
-    } finally {
+      
+      toast.success('Login successful!');
       setIsLoading(false);
+      return { success: true };
+    } else {
+      toast.error(result.error);
+      setIsLoading(false);
+      return { success: false, error: result.error };
     }
   };
 
@@ -106,21 +101,16 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     setIsLoading(true);
     
-    try {
-      const result = await authService.register(userData);
-      
-      if (result.success) {
-        toast.success('Registration successful! Please verify your email.');
-        return { success: true };
-      } else {
-        toast.error(result.error);
-        return { success: false, error: result.error };
-      }
-    } catch (error) {
-      toast.error('Registration failed. Please try again.');
-      return { success: false, error: error.message };
-    } finally {
+    const result = await authService.register(userData);
+    
+    if (result.success) {
+      toast.success('Registration successful! Please verify your email.');
       setIsLoading(false);
+      return { success: true };
+    } else {
+      toast.error(result.error);
+      setIsLoading(false);
+      return { success: false, error: result.error };
     }
   };
 

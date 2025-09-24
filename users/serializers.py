@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User
+from .models import User, Profile
 from django.contrib.auth import authenticate
 from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
@@ -194,4 +194,37 @@ class LogoutUserSerializer(serializers.Serializer):
                 # If token is invalid, just continue - cookies are already cleared
                 pass
         
+
+class ProfileSerializer(serializers.ModelSerializer):
+    followers_count = serializers.ReadOnlyField()
+    following_count = serializers.ReadOnlyField()
+    profile_image = serializers.SerializerMethodField() # Method field gets its value by calling a method on the serializer class. 
+    
+    # Add user fields from the related User model, this is so we can display user info in profile for the frontend
+    email = serializers.CharField(source='user.email', read_only=True)
+    full_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    first_name = serializers.CharField(source='user.first_name', read_only=True)
+    last_name = serializers.CharField(source='user.last_name', read_only=True)
+    is_verified = serializers.BooleanField(source='user.is_verified', read_only=True)
+    
+
+    class Meta:
+        model = Profile
+        fields = [
+            # Profile fields
+            'username', 'bio', 'profile_image', 'facebook_url', 'instagram_url', 
+            'twitter_url', 'tiktok_url', 'followers_count', 'following_count',
+            # User fields (from related User model)
+            'email', 'full_name', 'first_name', 'last_name', 'is_verified'
+        ]
+        read_only_fields = ['followers_count', 'following_count', 'email', 'full_name', 'first_name', 'last_name', 'is_verified']
+        
+    def get_profile_image(self, obj):
+        if obj.profile_image:
+            request = self.context.get('request') # Get the request from the context passed in views
+            if request:
+                # Gets the full absolute URL that the frontend can use to access the image
+                return request.build_absolute_uri(obj.profile_image.url)
+            return obj.profile_image.url
+        return None
         

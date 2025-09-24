@@ -99,6 +99,9 @@ CSRF_TRUSTED_ORIGINS = [
 
 CORS_ALLOW_CREDENTIALS = True
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media' # Directory to store uploaded media files
+
 # CSRF settings for API
 CSRF_COOKIE_NAME = 'csrftoken'
 CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript access for SPA

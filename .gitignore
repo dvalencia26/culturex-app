@@ -22,3 +22,10 @@ db.sqlite3-journal
 # Database backups
 *.sql
 *.dump
+
+# media and profile images
+media/
+media/*
+*.jpg
+*.png
+profile_images/

@@ -1,10 +1,11 @@
 from django.shortcuts import render
 from rest_framework.generics import GenericAPIView
-from .serializers import LoginSerializer, UserRegisterSerializer, PasswordResetRequestSerializer, SetNewPasswordSerializer, LogoutUserSerializer
+from .serializers import LoginSerializer, UserRegisterSerializer, PasswordResetRequestSerializer, SetNewPasswordSerializer, LogoutUserSerializer, ProfileSerializer
+from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from .utils import send_code_via_email
-from .models import OneTimePassword, User
+from .models import OneTimePassword, User, Profile
 from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import smart_str, DjangoUnicodeDecodeError
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
@@ -188,13 +189,23 @@ class VerifyUserView(GenericAPIView):
                 'authenticated': False
             }, status=status.HTTP_200_OK)
 
-        # if the user is authenticated, return user info
+        # if the user is authenticated, return user info including username from profile
         user = request.user
+        username = None
+        
+        # Try to get username from profile
+        try:
+            if hasattr(user, 'profile') and user.profile:
+                username = user.profile.username
+        except Exception:
+            pass  # If profile doesn't exist, username stays None
+            
         return Response({
             'id': user.id,
             'email': user.email,
             'full_name': user.get_full_name,
             'is_verified': user.is_verified,
+            'username': username,  # Include username from profile
             'authenticated': True
         }, status=status.HTTP_200_OK)
 
@@ -209,3 +220,70 @@ class CSRFTokenView(GenericAPIView):
         csrf_token = get_token(request)
         return Response({'csrf_token': csrf_token}, status=status.HTTP_200_OK)
 
+
+# We're using a single view to handle both user ID and username lookups for profiles
+# We use @api_view decorator to create function-based views, meaning we can define the allowed HTTP methods directly
+@api_view(['GET'])
+def get_user_profile_data(request, handle):
+    try:
+        profile = None # Set to None initially since we'll assign it later
+        
+        # Start by checking if the handle is numeric (user ID) or text (username)
+        if handle.isdigit():
+            # We get the profile by user ID
+            profile = Profile.objects.select_related('user').get(user__id=handle)
+        else:
+            # Otherwise, we get the profile by username (user-friendly URLs)
+            profile = Profile.objects.select_related('user').get(username=handle)
+        
+        # Serialize the profile
+        serializer = ProfileSerializer(profile, many=False, context={'request': request})
+        
+        # Check if current user follows this profile
+        following = False
+        
+        # Only check if the request user is authenticated and has a profile
+        if request.user.is_authenticated and hasattr(request.user, 'profile'):
+            try:
+                my_profile = request.user.profile # Get current user's profile
+                following = my_profile in profile.followers.all() # Check if my profile is following this profile
+            except Profile.DoesNotExist:
+                following = False
+        
+        # Return profile data
+        return Response({
+            **serializer.data,
+            'is_our_profile': request.user == profile.user,
+            'following': following
+        }, status=status.HTTP_200_OK)
+        
+    except Profile.DoesNotExist:
+        return Response({'error': 'Profile not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+
+@api_view(['POST'])
+def toggleFollow(request, handle):
+    try:
+        # Find the profile to follow/unfollow (by ID or username)
+        if handle.isdigit():
+            profile_to_follow = Profile.objects.get(user__id=handle)
+        else:
+            profile_to_follow = Profile.objects.get(username=handle)
+        
+        # Get current user's profile
+        my_profile = request.user.profile
+        
+        # Toggle follow status
+        if my_profile in profile_to_follow.followers.all():
+            profile_to_follow.followers.remove(my_profile)
+            return Response({'now_following': False}, status=status.HTTP_200_OK)
+        else:
+            profile_to_follow.followers.add(my_profile)
+            return Response({'now_following': True}, status=status.HTTP_200_OK)
+            
+    except Profile.DoesNotExist:
+        return Response({'error': 'Profile not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

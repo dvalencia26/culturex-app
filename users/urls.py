@@ -1,5 +1,7 @@
 from django.urls import path
-from .views import RegisterUserView, VerifyUserEmail, LoginUserView, PasswordResetConfirm, PasswordResetRequestView, SetNewPassword, LogoutUserView, VerifyUserView, CSRFTokenView, CookieTokenRefreshView
+from django.conf import settings
+from django.conf.urls.static import static
+from .views import RegisterUserView, VerifyUserEmail, LoginUserView, PasswordResetConfirm, PasswordResetRequestView, SetNewPassword, LogoutUserView, VerifyUserView, CSRFTokenView, CookieTokenRefreshView, get_user_profile_data, toggleFollow
 
 urlpatterns = [
     # User Registration & Email Verification
@@ -21,4 +23,9 @@ urlpatterns = [
 
     # Security
     path('csrf-token/', CSRFTokenView.as_view(), name='csrf-token'), 
+
+    # User Profile
+    path('profile/<str:handle>/', get_user_profile_data, name='user-profile'),  # Get user profile data
+    path('toggle-follow/<str:handle>/', toggleFollow, name='toggle-follow'),  # Toggle follow/unfollow user
+
 ]

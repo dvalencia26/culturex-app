@@ -43,13 +43,13 @@ const Navbar = () => {
             {user ? (
               <div className="flex items-center space-x-4">
                 <Link 
-                  to="/profile" 
+                  to={`/profile/${user?.username || user?.id}`}
                   className="text-[var(--text-color-ink)] hover:text-[var(--primary-color-royal)] px-3 py-2 text-sm font-medium transition-all duration-200 ease-[var(--ease-snappy)]"
                 >
                   Profile
                 </Link>
                 <span className="text-[var(--text-color-ink-400)] text-sm font-medium">
-                  Welcome, {user.first_name || user.email}
+                  Welcome, @{user?.username || user.first_name || user.email}
                 </span>
                 <button
                   onClick={handleLogout}
@@ -109,14 +109,14 @@ const Navbar = () => {
               {user ? (
                 <>
                   <Link
-                    to="/profile"
+                    to={`/profile/${user?.username || user?.id}`}
                     className="block px-3 py-2 text-[var(--text-color-ink)] hover:text-[var(--primary-color-royal)] text-base font-medium transition-all duration-200 ease-[var(--ease-snappy)]"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Profile
                   </Link>
                   <div className="px-3 py-2 text-[var(--text-color-ink-400)] text-sm font-medium">
-                    Welcome, {user.first_name || user.email}
+                    Welcome, @{user?.username || user.first_name || user.email}
                   </div>
                   <button
                     onClick={() => {
