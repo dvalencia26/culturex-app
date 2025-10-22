@@ -1,11 +1,12 @@
 from django.shortcuts import render
 from rest_framework.generics import GenericAPIView
-from .serializers import LoginSerializer, UserRegisterSerializer, PasswordResetRequestSerializer, SetNewPasswordSerializer, LogoutUserSerializer, ProfileSerializer
-from rest_framework.decorators import api_view
+from .serializers import LoginSerializer, UserRegisterSerializer, PasswordResetRequestSerializer, SetNewPasswordSerializer, LogoutUserSerializer, ProfileSerializer, PostSerializer
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from .utils import send_code_via_email
-from .models import OneTimePassword, User, Profile
+from .models import OneTimePassword, User, Profile, Post
 from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import smart_str, DjangoUnicodeDecodeError
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
@@ -13,6 +14,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from django.middleware.csrf import get_token # To get the CSRF token
 from django.conf import settings
+from django.db import models
+from cities_light.models import Country, City
+from django_countries import countries as django_countries
 
 
 class RegisterUserView(GenericAPIView):
@@ -264,6 +268,7 @@ def get_user_profile_data(request, handle):
     
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def toggleFollow(request, handle):
     try:
         # Find the profile to follow/unfollow (by ID or username)
@@ -287,3 +292,292 @@ def toggleFollow(request, handle):
         return Response({'error': 'Profile not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# POST VIEWS
+@api_view(['GET', 'POST'])
+def post_list_create(request):
+    """
+    GET: List of all posts (from everyone)
+    POST: Create a new post (authenticated users only)
+    """
+     # Anyone can view published posts 
+    if request.method == 'GET':
+       
+        # Select_related() is use for foreign key relationships to optimize queries
+        # BASE QUERY: Gets all 
+        posts = Post.objects.select_related(
+            'user__profile', 'primary_city'
+        ).filter(status=Post.Status.PUBLISHED).order_by('-created_at') # Newest posts first
+        
+        # GET.get() extracts query parameters from the URL for filtering
+        country = request.GET.get('country')              # gets the country code
+        location_scope = request.GET.get('location_scope') # location_scope= city or country or none
+        author = request.GET.get('author')                # author=username
+        
+        
+        city = request.GET.get('city')                    # city ID
+        search = request.GET.get('search')                # title/content search
+        
+        # We apply filters based on the query parameters
+        if country:
+            posts = posts.filter(primary_country=country)
+        if location_scope:
+            posts = posts.filter(location_scope=location_scope)
+        if author:
+            posts = posts.filter(user__profile__username=author)
+        if city:
+            posts = posts.filter(primary_city__id=city)
+        if search:
+            # model.Q allows complex queries with OR conditions
+            # We use it here to search by title or content
+            posts = posts.filter(
+                models.Q(title__icontains=search) | 
+                models.Q(content__icontains=search)
+            )
+        
+        # Implement pagination for handling large datasets
+        limit = int(request.GET.get('limit', 20))  # Default 20 posts
+        offset = int(request.GET.get('offset', 0))  # offset=0 means start at the beginning of the list
+        
+        total_count = posts.count() # Total posts after filtering
+        posts = posts[offset:offset + limit] # Paginate the posts
+        
+        # Serialize the posts
+        serializer = PostSerializer(posts, many=True, context={'request': request})
+        return Response({
+            'posts': serializer.data,
+            'count': len(serializer.data),
+            'total': total_count,
+            'has_more': offset + limit < total_count
+        }, status=status.HTTP_200_OK)
+
+    # Handle POST request
+    elif request.method == 'POST':
+        # Only authenticated users can create posts
+        if not request.user.is_authenticated:
+            return Response({
+                'error': 'Authentication required to create posts'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Create a new post
+        serializer = PostSerializer(data=request.data, context={'request': request})
+        
+        if serializer.is_valid():
+            # Save the post with the current user as author
+            post = serializer.save(user=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+def get_user_posts(request, username):
+    """Get all published posts by a specific user"""
+    try:
+        # Get posts by username. 
+        posts = Post.objects.select_related(
+            'user__profile', 'primary_city', 
+        ).filter(
+            user__profile__username=username,
+            status=Post.Status.PUBLISHED
+        ).order_by('-created_at')
+        
+        # Check if any posts exist for this user
+        if not posts.exists():
+            return Response({
+                'posts': [],
+                'count': 0,
+                'message': f'No posts found for user @{username}'
+            }, status=status.HTTP_200_OK)
+        
+        # Serialize the posts
+        serializer = PostSerializer(posts, many=True, context={'request': request})
+        return Response({
+            'posts': serializer.data,
+            'count': posts.count()
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'error': 'Error fetching user posts'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def post_detail(request, username, slug):
+    """
+    GET: Retrieve a specific post by username and slug
+    PUT/PATCH: Update a post, only author can update
+    DELETE: Delete a post, only author can delete
+    """
+    try:
+        # Get the post by username and slug
+        post = Post.objects.select_related(
+            'user__profile', 'primary_city',
+        ).get(user__profile__username=username, slug=slug)
+        
+        # Check permissions for viewing
+        if post.status != Post.Status.PUBLISHED:
+            # Only allow author to view unpublished posts
+            if request.user != post.user:
+                return Response({
+                    'error': 'Post not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+        
+        if request.method == 'GET':
+            serializer = PostSerializer(post, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        # For PUT, PATCH, DELETE - check if user is the author
+        if request.user != post.user:
+            return Response({
+                'error': 'You do not have permission to modify this post'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        if request.method in ['PUT', 'PATCH']:
+            # Update the post
+            partial = request.method == 'PATCH'
+            serializer = PostSerializer(
+                post, 
+                data=request.data, 
+                partial=partial,
+                context={'request': request}
+            )
+            
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        elif request.method == 'DELETE':
+            # Delete the post
+            post.delete()
+            return Response({
+                'message': 'Post deleted successfully'
+            }, status=status.HTTP_204_NO_CONTENT)
+            
+    except Post.DoesNotExist:
+        return Response({
+            'error': 'Post not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({
+            'error': f'Error: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_my_posts(request):
+    """Get all posts by the current authenticated user (including drafts)"""
+    try:
+        # Get all posts by current user (including drafts)
+        posts = Post.objects.select_related(
+            'user__profile', 'primary_city', 
+        ).filter(user=request.user).order_by('-created_at')
+        
+        # Optional status filtering
+        status_filter = request.GET.get('status')
+        if status_filter:
+            posts = posts.filter(status=status_filter)
+        
+        serializer = PostSerializer(posts, many=True, context={'request': request})
+        return Response({
+            'posts': serializer.data,
+            'count': posts.count()
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'error': 'Error fetching your posts'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# Location Data Endpoints
+@api_view(['GET'])
+def get_countries_for_posts(request):
+    """Get countries based on location scope with filtering"""
+    try:
+        location_scope = request.GET.get('location_scope', 'country')
+        
+        if location_scope == 'city':
+            # For city posts: get only countries that have cities in database
+            countries = Country.objects.filter(
+                city__isnull=False
+            ).distinct().order_by('name')
+            
+            countries_data = [{
+                'code': country.code2,
+                'name': country.name
+            } for country in countries]
+        else:
+            # For country posts
+            countries_data = [{
+                'code': code,
+                'name': name
+            } for code, name in django_countries]
+        
+        return Response({
+            'countries': countries_data,
+            'count': len(countries_data),
+            'location_scope': location_scope
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'error': f'Error fetching countries: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def get_cities_by_country(request, country_code):
+    """City filtering with search and pagination"""
+    
+    try:
+        # Get search query
+        search = request.GET.get('search', '').strip()
+        limit = min(int(request.GET.get('limit', 50)), 200)  # Max 200 cities
+        
+        # Base query
+        cities = City.objects.filter(
+            country__code2=country_code
+        ).select_related('region', 'country')
+        
+        # Apply search filter with priority ordering
+        if search:
+            cities = cities.filter(
+                name__icontains=search
+            ).order_by(
+                # Prioritize cities that start with the search term
+                models.Case(
+                    models.When(name__istartswith=search, then=models.Value(0)),
+                    default=models.Value(1),
+                    output_field=models.IntegerField()
+                ),
+                'name'  # Then alphabetical
+            )
+        else:
+            # When no search, just order alphabetically
+            cities = cities.order_by('name')
+        
+        # Pagination
+        cities = cities[:limit] # Paginated slice
+        
+        cities_data = [{
+            'id': city.id,
+            'name': city.name,
+            'display_name': city.name 
+        } for city in cities]
+        
+        return Response({
+            'cities': cities_data,
+            'search': search,
+            'country_code': country_code
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'error': f'Error fetching cities: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

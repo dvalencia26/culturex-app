@@ -38,3 +38,11 @@ def send_normal_email(data):
     )
     email.send()
 
+
+# Utility function to get full URL for an image field
+# This is being used in serializers for Profile and Post to return absolute URLs for image fields
+def get_full_image_url(request, image_field):
+    if not image_field:
+        return None
+    return request.build_absolute_uri(image_field.url)
+

@@ -1,7 +1,7 @@
 from django.urls import path
 from django.conf import settings
 from django.conf.urls.static import static
-from .views import RegisterUserView, VerifyUserEmail, LoginUserView, PasswordResetConfirm, PasswordResetRequestView, SetNewPassword, LogoutUserView, VerifyUserView, CSRFTokenView, CookieTokenRefreshView, get_user_profile_data, toggleFollow
+from .views import RegisterUserView, VerifyUserEmail, LoginUserView, PasswordResetConfirm, PasswordResetRequestView, SetNewPassword, LogoutUserView, VerifyUserView, CSRFTokenView, CookieTokenRefreshView, get_user_profile_data, toggleFollow, post_list_create, get_user_posts, post_detail, get_my_posts, get_countries_for_posts, get_cities_by_country
 
 urlpatterns = [
     # User Registration & Email Verification
@@ -27,5 +27,15 @@ urlpatterns = [
     # User Profile
     path('profile/<str:handle>/', get_user_profile_data, name='user-profile'),  # Get user profile data
     path('toggle-follow/<str:handle>/', toggleFollow, name='toggle-follow'),  # Toggle follow/unfollow user
+
+    # Posts
+    path('posts/', post_list_create, name='post-list-create'),  # GET: List posts, POST: Create post
+    path('my-posts/', get_my_posts, name='my-posts'),  # GET: Current user's posts (including drafts)
+    path('profile/<str:username>/posts/', get_user_posts, name='user-posts'),  # GET: User's published posts
+    path('profile/<str:username>/posts/<slug:slug>/', post_detail, name='post-detail'),  # GET/PUT/PATCH/DELETE: Specific post
+
+    # Location Data
+    path('countries/', get_countries_for_posts, name='countries-for-posts'),  # GET: Countries based on location scope
+    path('countries/<str:country_code>/cities/', get_cities_by_country, name='cities-by-country'),  # GET: Cities for country
 
 ]

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext';
 import { useParams, useNavigate } from 'react-router-dom';
-import { authService } from '../services/authService';
+import { userService } from '../services/userService';
 import Loader from './Loader';
 
 const Profile = () => {
@@ -30,7 +30,7 @@ const Profile = () => {
 
       try {
         setLoading(true);
-        const result = await authService.getUserProfile(profileIdentifier);
+        const result = await userService.getUserProfile(profileIdentifier);
         if (result.success) {
           setProfile(result.data);
           // Set individual state variables
@@ -57,7 +57,7 @@ const Profile = () => {
     if (!handle || isOurProfile) return;
     
     try {
-      const result = await authService.toggleFollow(handle);
+      const result = await userService.toggleFollow(handle);
       if (result.success) {
         // Update local follow state and follower count
         if (result.data.now_following) {

@@ -121,32 +121,6 @@ export const authService = {
         error: error.response?.data?.detail || 'Google authentication failed' 
       };
     }
-  },
-
-  // Get User Profile
-  getUserProfile: async (userId) => {
-    try {
-      const response = await axiosInstance.get(`/auth/profile/${userId}/`);
-      return { success: true, data: response.data };
-    } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.error || 'Failed to fetch profile data' 
-      };
-    }
-  },
-
-  // Toggle Follow/Unfollow User
-  toggleFollow: async (handle) => {
-    try {
-      const response = await axiosInstance.post(`/auth/toggle-follow/${handle}/`);
-      return { success: true, data: response.data };
-    } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.error || 'Failed to toggle follow status' 
-      };
-    }
   }
 };
 

@@ -3,6 +3,12 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.utils.translation import gettext_lazy as _
 from .managers import UserManager
 from rest_framework_simplejwt.tokens import RefreshToken
+from django_countries.fields import CountryField
+from slugify import slugify
+from cities_light.models import Region, City
+from django.core.exceptions import ValidationError
+
+
 import re
 
 
@@ -114,3 +120,91 @@ class OneTimePassword(models.Model):
 
     def __str__(self):
         return f"{self.user.first_name} - passcode"
+    
+
+class Post(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
+    title = models.CharField(max_length=200, verbose_name="Post Title")
+    slug = models.SlugField(max_length=200, blank=True) # set slug to blank initially, will be auto-generated on save
+
+    content = models.TextField() 
+
+    class LocationScope(models.TextChoices):
+        NONE = "none", "Not location specific"
+        COUNTRY = "country", "Country specific"
+        CITY = "city", "City specific"
+
+    location_scope = models.CharField(max_length=20, choices=LocationScope.choices, default=LocationScope.NONE,
+                                      help_text="Is this post related to a specific location?")
+
+    # For single-country or city-specific posts
+    # database indexes make queries faster but use more storage space and slow down writes.
+    primary_country = CountryField(blank=True, null=True, db_index=True)
+
+    #Define foreign keys to cities_light models for region and city
+    primary_city = models.ForeignKey(City, blank=True, null=True, on_delete=models.PROTECT)
+
+    # Publication status
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        PUBLISHED = "published", "Published"
+        ARCHIVED = "archived", "Archived"
+
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.DRAFT)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True) # db_index=True for faster queries by created_at
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        """Validate location data consistency"""        
+        # Only validate when location scope is city to ensure both country and city are set
+        if self.location_scope == self.LocationScope.CITY:
+            if not self.primary_country or not self.primary_city:
+                raise ValidationError("City-specific posts must have both country and city selected.")
+
+        # Check city/country consistency
+        if self.primary_city and self.primary_country:
+            # cities-light Country uses .code2 for ISO country codes
+            city_country_code = self.primary_city.region.country.code2
+            # django-countries uses .code for ISO country codes
+            primary_country_code = self.primary_country.code
+            
+            if primary_country_code != city_country_code:
+                raise ValidationError(f"Selected city is in {city_country_code}, but country is set to {primary_country_code}")
+        
+    def save(self, *args, **kwargs):
+        # Auto-generate slug from title so user doesn't have to write it manually
+        if not self.slug:
+            self.slug = self.generate_unique_slug()
+        super().save(*args, **kwargs)
+    
+    def generate_unique_slug(self):
+        """Generate a unique slug per user from the title"""
+        base_slug = slugify(self.title) # We use python-slugify to convert title to URL-friendly format
+
+        if not base_slug:  # If title has no valid characters 
+            base_slug = f"post-{self.user.id}" 
+        
+        # Make slug unique per user so different users can have same slug
+        slug = base_slug
+        counter = 1
+        
+        # Check if slug exists for this user
+        while Post.objects.filter(user=self.user, slug=slug).exists():
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+        
+        return slug
+    
+    def get_absolute_url(self):
+        """Return the URL for this post"""
+        return f"/u/{self.user.profile.username}/posts/{self.slug}/"
+    
+    def __str__(self):
+        return f"{self.title} by {self.user.get_full_name}"
+    
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'slug'], name='unique_user_slug')
+        ]

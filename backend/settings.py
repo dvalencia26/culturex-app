@@ -51,8 +51,17 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
+    'django_countries',
+    'cities_light',
 ]
 
+CITIES_LIGHT_INCLUDE_COUNTRIES = ['EC', 'MX','BR', 'US', 'TR']
+CITIES_LIGHT_TRANSLATION_LANGUAGES = ['en', 'es', 'abbr']  
+CITIES_LIGHT_INCLUDE_CITY_TYPES = ['PPL', 'PPLA', 'PPLA2', 'PPLC',]
+# PPL = Populated place (city, town, village);
+# PPLA helps with cases like Us > Texas > Austin. It guarantees we get cities that are admin capitals 
+# PPLA2 = In Ecuador, this gives us provincial capitals like Cuenca, Loja, etc.
+# PPLC = Capital of a political entity (country, state, province, etc.)
 
 
 MIDDLEWARE = [

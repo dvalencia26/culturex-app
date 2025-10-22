@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Profile
+from .models import User, Profile, Post
 from django.contrib.auth import authenticate
 from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
@@ -7,7 +7,7 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.contrib.sites.shortcuts import get_current_site
 from django.utils.encoding import smart_bytes, force_str
 from django.urls import reverse
-from .utils import send_normal_email
+from .utils import send_normal_email, get_full_image_url
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from django.conf import settings
 
@@ -228,3 +228,65 @@ class ProfileSerializer(serializers.ModelSerializer):
             return obj.profile_image.url
         return None
         
+
+class PostSerializer(serializers.ModelSerializer):
+    author_username = serializers.CharField(source='user.profile.username', read_only=True) # Display user's profile username
+    author_full_name = serializers.CharField(source='user.get_full_name', read_only=True) # Display user's full name
+    author_profile_image = serializers.SerializerMethodField() # Get profile image
+
+    slug = serializers.SlugField(read_only=True) # Slug is read-only, generated from title
+    created_at = serializers.DateTimeField(read_only=True) # Read-only, set on creation
+    updated_at = serializers.DateTimeField(read_only=True) # Read-only, set on update
+    # get the profile image of the user who created the post
+
+    # Location display fields
+    country_name = serializers.SerializerMethodField()
+    country_flag = serializers.SerializerMethodField()
+    city_name = serializers.CharField(source='primary_city.name', read_only=True)
+
+    absolute_url = serializers.CharField(source='get_absolute_url', read_only=True)
+
+    def get_author_profile_image(self, obj):
+        request = self.context.get('request')
+        if hasattr(obj.user, 'profile'): # Check if the user has a profile
+            return get_full_image_url(request, obj.user.profile.profile_image) # Use utility function to get full URL
+        return None
+    
+    def get_country_name(self, obj):
+        """Get country name from primary_country field"""
+        if obj.primary_country:
+            return obj.primary_country.name
+        return None
+    
+    def get_country_flag(self, obj):
+        """Get country flag for display"""
+        if obj.primary_country:
+            return obj.primary_country.flag
+        return None
+    
+    def create(self, validated_data):
+        # Create post with model validation
+        post = Post(**validated_data) # Create Post instance but don't save to DB yet
+        post.full_clean()  # Validate the model using its clean() method
+        post.save() # Save to DB, triggers save() method in Post model to auto-generate slug
+        return post
+
+    class Meta:
+            model = Post
+            # These are all that will appear in the JSON response to the frontend
+            fields = [
+                # Fields the user can input (writable)
+                'title', 'content', 'location_scope', 'primary_country', 'primary_city', 'status',
+                # Read-only fields (auto-generated)
+                'id', 'slug', 'created_at', 'updated_at', 'absolute_url',
+                # Author info (read-only)
+                'author_username', 'author_full_name', 'author_profile_image',
+                # Location display names (read-only)
+                'country_name', 'country_flag', 'city_name',
+            ]
+            # These fields are read-only and cannot be modified by the user
+            read_only_fields = [
+                'id', 'slug', 'created_at', 'updated_at', 'absolute_url',
+                'author_username', 'author_full_name', 'author_profile_image',
+                'country_name', 'country_flag', 'city_name'
+            ]
