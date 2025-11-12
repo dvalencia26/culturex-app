@@ -310,27 +310,59 @@ def post_list_create(request):
             'user__profile', 'primary_city'
         ).filter(status=Post.Status.PUBLISHED).order_by('-created_at') # Newest posts first
         
-        # GET.get() extracts query parameters from the URL for filtering
-        country = request.GET.get('country')              # gets the country code
-        location_scope = request.GET.get('location_scope') # location_scope= city or country or none
-        author = request.GET.get('author')                # author=username
-        
-        
-        city = request.GET.get('city')                    # city ID
-        search = request.GET.get('search')                # title/content search
-        
-        # We apply filters based on the query parameters
-        if country:
-            posts = posts.filter(primary_country=country)
-        if location_scope:
+        # Extract filters 
+        country = request.GET.get('country')              # Country code: EC, BR, US
+        city = request.GET.get('city')                    # City ID: 123
+        city_slug = request.GET.get('city_slug')          # City slug: quito, sao-paulo
+        location_scope = request.GET.get('location_scope') # none, country, city
+        author = request.GET.get('author')                # Username
+        search = request.GET.get('search')                # Text search
+        include_related = request.GET.get('include_related', 'false').lower() == 'true'
+
+        # LOCATION FILTERING LOGIC
+        if country and (city or city_slug):
+            # Specific city posts only
+            if city_slug:
+                # Filter by city slug
+                posts = posts.filter(
+                    primary_city__slug=city_slug,
+                    primary_city__country__code2=country
+                )
+            else:
+                # Filter by city ID
+                posts = posts.filter(primary_city__id=city)
+            
+        elif country and not city and not city_slug:
+            if include_related:
+                # All posts related to this country (country posts + city posts in this country)
+                posts = posts.filter(
+                    models.Q(primary_country=country) |  # Country posts about this country
+                    models.Q(primary_city__country__code2=country)  # City posts in this country
+                )
+            else:
+                # Only country-level posts about this country
+                posts = posts.filter(
+                    primary_country=country,
+                    location_scope='country'
+                )
+                
+        elif (city or city_slug) and not country:
+            # Specific city posts only
+            if city_slug:
+                posts = posts.filter(primary_city__slug=city_slug)
+            else:
+                posts = posts.filter(primary_city__id=city)
+            
+        elif location_scope:
+            # Filter by location scope only
             posts = posts.filter(location_scope=location_scope)
+        
+        # OTHER FILTERS
         if author:
             posts = posts.filter(user__profile__username=author)
-        if city:
-            posts = posts.filter(primary_city__id=city)
+            
         if search:
-            # model.Q allows complex queries with OR conditions
-            # We use it here to search by title or content
+            # Search in title and content
             posts = posts.filter(
                 models.Q(title__icontains=search) | 
                 models.Q(content__icontains=search)
@@ -349,7 +381,15 @@ def post_list_create(request):
             'posts': serializer.data,
             'count': len(serializer.data),
             'total': total_count,
-            'has_more': offset + limit < total_count
+            'has_more': offset + limit < total_count,
+            'filters': {
+                'country': country,
+                'city': city,
+                'location_scope': location_scope,
+                'include_related': include_related,
+                'author': author,
+                'search': search
+            }
         }, status=status.HTTP_200_OK)
 
     # Handle POST request
@@ -405,12 +445,11 @@ def get_user_posts(request, username):
 
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
-@permission_classes([IsAuthenticated])
 def post_detail(request, username, slug):
     """
-    GET: Retrieve a specific post by username and slug
-    PUT/PATCH: Update a post, only author can update
-    DELETE: Delete a post, only author can delete
+    GET: Retrieve a specific post by username and slug (public access for published posts)
+    PUT/PATCH: Update a post, only author can update (requires authentication)
+    DELETE: Delete a post, only author can delete (requires authentication)
     """
     try:
         # Get the post by username and slug
@@ -420,17 +459,24 @@ def post_detail(request, username, slug):
         
         # Check permissions for viewing
         if post.status != Post.Status.PUBLISHED:
-            # Only allow author to view unpublished posts
-            if request.user != post.user:
+            # Only allow authenticated author to view unpublished posts
+            if not request.user.is_authenticated or request.user != post.user:
                 return Response({
                     'error': 'Post not found'
                 }, status=status.HTTP_404_NOT_FOUND)
         
         if request.method == 'GET':
+            # GET is public for published posts, no authentication required
             serializer = PostSerializer(post, context={'request': request})
             return Response(serializer.data, status=status.HTTP_200_OK)
         
-        # For PUT, PATCH, DELETE - check if user is the author
+        # For PUT, PATCH, DELETE - require authentication
+        if not request.user.is_authenticated:
+            return Response({
+                'error': 'Authentication required'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Check if user is the author
         if request.user != post.user:
             return Response({
                 'error': 'You do not have permission to modify this post'
@@ -528,6 +574,78 @@ def get_countries_for_posts(request):
     except Exception as e:
         return Response({
             'error': f'Error fetching countries: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def get_countries_with_posts(request):
+    """Get countries that have published posts"""
+    try:
+        # Get unique countries from published posts
+        countries_with_posts = Post.objects.filter(
+            status=Post.Status.PUBLISHED,
+            primary_country__isnull=False
+        ).values_list('primary_country', flat=True).distinct()
+        
+        # Convert country codes to country names using django_countries
+        countries_data = []
+        for country_code in countries_with_posts:
+            try:
+                country_name = dict(django_countries)[country_code]
+                countries_data.append({
+                    'code': country_code,
+                    'name': country_name
+                })
+            except KeyError:
+                # Skip invalid country codes
+                continue
+        
+        # Sort by country name
+        countries_data.sort(key=lambda x: x['name'])
+        
+        return Response({
+            'countries': countries_data,
+            'count': len(countries_data)
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'error': f'Error fetching countries with posts: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def get_cities_with_posts_by_country(request, country_code):
+    """Get cities that have posts in a specific country"""
+    try:
+        # Get cities that have published city-specific posts in this country
+        cities_with_posts = Post.objects.filter(
+            status=Post.Status.PUBLISHED,
+            location_scope='city',
+            primary_city__country__code2=country_code
+        ).values_list('primary_city', flat=True).distinct()
+        
+        # Get city details
+        cities = City.objects.filter(
+            id__in=cities_with_posts
+        ).select_related('country').order_by('name')
+        
+        cities_data = [{
+            'id': city.id,
+            'name': city.name,
+            'slug': city.name.lower().replace(' ', '-'),
+            'country_code': city.country.code2
+        } for city in cities]
+        
+        return Response({
+            'cities': cities_data,
+            'count': len(cities_data),
+            'country_code': country_code.upper()
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'error': f'Error fetching cities with posts: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

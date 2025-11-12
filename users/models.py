@@ -157,13 +157,26 @@ class Post(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def clean(self):
-        """Validate location data consistency"""        
-        # Only validate when location scope is city to ensure both country and city are set
-        if self.location_scope == self.LocationScope.CITY:
+        """Validate location data consistency"""
+        
+        # Validation for NONE (global posts - no location data allowed)
+        if self.location_scope == self.LocationScope.NONE:
+            if self.primary_country or self.primary_city:
+                raise ValidationError("Global posts (location_scope='none') cannot have country or city data.")
+        
+        # Validation for COUNTRY (must have country, no city)
+        elif self.location_scope == self.LocationScope.COUNTRY:
+            if not self.primary_country:
+                raise ValidationError("Country-specific posts must have a country selected.")
+            if self.primary_city:
+                raise ValidationError("Country-level posts should not have a city selected. Use 'city' scope for city-specific posts.")
+        
+        # Validation for CITY (must have both country and city)
+        elif self.location_scope == self.LocationScope.CITY:
             if not self.primary_country or not self.primary_city:
                 raise ValidationError("City-specific posts must have both country and city selected.")
 
-        # Check city/country consistency
+        # Check city/country consistency (if both are set)
         if self.primary_city and self.primary_country:
             # cities-light Country uses .code2 for ISO country codes
             city_country_code = self.primary_city.region.country.code2
@@ -199,7 +212,13 @@ class Post(models.Model):
     
     def get_absolute_url(self):
         """Return the URL for this post"""
-        return f"/u/{self.user.profile.username}/posts/{self.slug}/"
+        try:
+            username = self.user.profile.username
+        except Profile.DoesNotExist:
+            # Fallback to user's email prefix if no profile exists
+            username = self.user.email.split('@')[0]
+        
+        return f"/u/{username}/posts/{self.slug}/"
     
     def __str__(self):
         return f"{self.title} by {self.user.get_full_name}"

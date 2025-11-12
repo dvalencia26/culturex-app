@@ -16,7 +16,9 @@ export const postService = {
       if (filters.location_scope) params.append('location_scope', filters.location_scope);
       if (filters.author) params.append('author', filters.author);
       if (filters.city) params.append('city', filters.city);
+      if (filters.city_slug) params.append('city_slug', filters.city_slug); 
       if (filters.search) params.append('search', filters.search);
+      if (filters.include_related !== undefined) params.append('include_related', filters.include_related);
       if (filters.limit) params.append('limit', filters.limit);
       if (filters.offset) params.append('offset', filters.offset);
 
@@ -142,17 +144,61 @@ export const postService = {
   },
 
   // Get posts by country
-  getPostsByCountry: async (countryCode, limit = 20, offset = 0) => {
+  getPostsByCountry: async (countryCode, options = {}) => {
     try {
-      return await postService.getAllPosts({
+      const filters = {
         country: countryCode,
-        limit,
-        offset
-      });
+        include_related: options.includeRelated !== false, // Default true
+        limit: options.limit || 20,
+        offset: options.offset || 0,
+        ...options
+      };
+      
+      // Add city filter if citySlug is provided
+      if (options.citySlug) {
+        filters.city_slug = options.citySlug;
+        delete filters.location_scope; // Do not use location_scope when filtering by city
+      }
+      
+      return await postService.getAllPosts(filters);
     } catch (error) {
       return {
         success: false,
         error: `Failed to fetch posts for ${countryCode}`
+      };
+    }
+  },
+
+  // Get posts by city
+  getCityPosts: async (cityId, options = {}) => {
+    try {
+      return await postService.getAllPosts({ 
+        city: cityId, 
+        limit: options.limit || 20,
+        offset: options.offset || 0,
+        ...options 
+      });
+    } catch (error) {
+      return {
+        success: false,
+        error: `Failed to fetch posts for city ${cityId}`
+      };
+    }
+  },
+
+  // Get global posts (no location)
+  getGlobalPosts: async (options = {}) => {
+    try {
+      return await postService.getAllPosts({ 
+        location_scope: 'none', 
+        limit: options.limit || 20,
+        offset: options.offset || 0,
+        ...options 
+      });
+    } catch (error) {
+      return {
+        success: false,
+        error: 'Failed to fetch global posts'
       };
     }
   },
@@ -181,6 +227,26 @@ export const postService = {
       return response.data; // Return data directly for simpler usage
     } catch (error) {
       throw new Error(error.response?.data?.error || 'Failed to fetch countries');
+    }
+  },
+
+  // Get countries that have posts (for display purposes)
+  getCountriesWithPosts: async () => {
+    try {
+      const response = await axiosInstance.get('/auth/countries-with-posts/');
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.error || 'Failed to fetch countries with posts');
+    }
+  },
+
+  // Get cities with posts for a specific country
+  getCitiesWithPostsByCountry: async (countryCode) => {
+    try {
+      const response = await axiosInstance.get(`/auth/countries/${countryCode}/cities-with-posts/`);
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.error || 'Failed to fetch cities with posts');
     }
   },
 

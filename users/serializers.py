@@ -230,7 +230,7 @@ class ProfileSerializer(serializers.ModelSerializer):
         
 
 class PostSerializer(serializers.ModelSerializer):
-    author_username = serializers.CharField(source='user.profile.username', read_only=True) # Display user's profile username
+    author_username = serializers.SerializerMethodField() # Display user's profile username
     author_full_name = serializers.CharField(source='user.get_full_name', read_only=True) # Display user's full name
     author_profile_image = serializers.SerializerMethodField() # Get profile image
 
@@ -241,10 +241,19 @@ class PostSerializer(serializers.ModelSerializer):
 
     # Location display fields
     country_name = serializers.SerializerMethodField()
+    country_code = serializers.SerializerMethodField()
     country_flag = serializers.SerializerMethodField()
     city_name = serializers.CharField(source='primary_city.name', read_only=True)
 
     absolute_url = serializers.CharField(source='get_absolute_url', read_only=True)
+
+    def get_author_username(self, obj):
+        """Get author username, with fallback if profile doesn't exist"""
+        try:
+            return obj.user.profile.username
+        except Profile.DoesNotExist:
+            # Fallback to email prefix if no profile exists
+            return obj.user.email.split('@')[0]
 
     def get_author_profile_image(self, obj):
         request = self.context.get('request')
@@ -256,6 +265,12 @@ class PostSerializer(serializers.ModelSerializer):
         """Get country name from primary_country field"""
         if obj.primary_country:
             return obj.primary_country.name
+        return None
+    
+    def get_country_code(self, obj):
+        """Get country code for flag emoji generation"""
+        if obj.primary_country:
+            return obj.primary_country.code
         return None
     
     def get_country_flag(self, obj):
@@ -282,11 +297,11 @@ class PostSerializer(serializers.ModelSerializer):
                 # Author info (read-only)
                 'author_username', 'author_full_name', 'author_profile_image',
                 # Location display names (read-only)
-                'country_name', 'country_flag', 'city_name',
+                'country_name', 'country_code', 'country_flag', 'city_name',
             ]
             # These fields are read-only and cannot be modified by the user
             read_only_fields = [
                 'id', 'slug', 'created_at', 'updated_at', 'absolute_url',
                 'author_username', 'author_full_name', 'author_profile_image',
-                'country_name', 'country_flag', 'city_name'
+                'country_name', 'country_code', 'country_flag', 'city_name'
             ]

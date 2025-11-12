@@ -1,7 +1,7 @@
 from django.urls import path
 from django.conf import settings
 from django.conf.urls.static import static
-from .views import RegisterUserView, VerifyUserEmail, LoginUserView, PasswordResetConfirm, PasswordResetRequestView, SetNewPassword, LogoutUserView, VerifyUserView, CSRFTokenView, CookieTokenRefreshView, get_user_profile_data, toggleFollow, post_list_create, get_user_posts, post_detail, get_my_posts, get_countries_for_posts, get_cities_by_country
+from .views import RegisterUserView, VerifyUserEmail, LoginUserView, PasswordResetConfirm, PasswordResetRequestView, SetNewPassword, LogoutUserView, VerifyUserView, CSRFTokenView, CookieTokenRefreshView, get_user_profile_data, toggleFollow, post_list_create, get_user_posts, post_detail, get_my_posts, get_countries_for_posts, get_countries_with_posts, get_cities_by_country, get_cities_with_posts_by_country
 
 urlpatterns = [
     # User Registration & Email Verification
@@ -36,6 +36,8 @@ urlpatterns = [
 
     # Location Data
     path('countries/', get_countries_for_posts, name='countries-for-posts'),  # GET: Countries based on location scope
+    path('countries-with-posts/', get_countries_with_posts, name='countries-with-posts'),  # GET: Countries that have posts
     path('countries/<str:country_code>/cities/', get_cities_by_country, name='cities-by-country'),  # GET: Cities for country
+    path('countries/<str:country_code>/cities-with-posts/', get_cities_with_posts_by_country, name='cities-with-posts'),  # GET: Cities with posts
 
 ]
