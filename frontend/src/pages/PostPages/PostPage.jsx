@@ -6,6 +6,7 @@ import postService from '../../services/postService';
 import { toast } from 'sonner';
 import dayjs from 'dayjs';
 import { getFlagEmoji } from '../../utils/countryUtils';
+import { MapPin, Flag, Globe, FileText, ChevronLeft, Edit, Trash2 } from 'lucide-react';
 
 /**
  * PostPage Component
@@ -103,25 +104,25 @@ const PostPage = () => {
 
     if (post.location_scope === 'city' && post.city_name) {
       return (
-        <span className="inline-flex items-center bg-[var(--color-gold)] text-[var(--color-white)] px-4 py-2 rounded-pill text-sm font-medium">
-          📍 {post.city_name}, {post.country_name}
+        <span className="inline-flex items-center gap-1 bg-[var(--color-gold)] text-[var(--color-white)] px-4 py-2 rounded-pill text-sm font-medium">
+          <MapPin className="w-4 h-4" /> {post.city_name}, {post.country_name}
         </span>
       );
     }
     
     if (post.location_scope === 'country' && post.country_name) {
-      const flagEmoji = post.country_code ? getFlagEmoji(post.country_code) : '🏳️';
+      const flagDisplay = post.country_code ? getFlagEmoji(post.country_code) : <Flag className="w-4 h-4" />;
       return (
-        <span className="inline-flex items-center bg-[var(--primary-color-royal)] text-[var(--color-white)] px-4 py-2 rounded-pill text-sm font-medium">
-          {flagEmoji} {post.country_name}
+        <span className="inline-flex items-center gap-1 bg-[var(--primary-color-royal)] text-[var(--color-white)] px-4 py-2 rounded-pill text-sm font-medium">
+          {flagDisplay} {post.country_name}
         </span>
       );
     }
     
     if (post.location_scope === 'none') {
       return (
-        <span className="inline-flex items-center bg-[var(--secondary-color-orchid)] text-[var(--color-white)] px-4 py-2 rounded-pill text-sm font-medium">
-          🌍 Global
+        <span className="inline-flex items-center gap-1 bg-[var(--secondary-color-orchid)] text-[var(--color-white)] px-4 py-2 rounded-pill text-sm font-medium">
+          <Globe className="w-4 h-4" /> Global
         </span>
       );
     }
@@ -152,7 +153,9 @@ const PostPage = () => {
       <div className="min-h-screen bg-[var(--color-background-snow)] font-ui">
         <div className="pt-20 pb-16 px-4">
           <div className="max-w-4xl mx-auto text-center">
-            <div className="text-6xl mb-4">📝</div>
+            <div className="flex justify-center mb-4">
+              <FileText className="w-16 h-16 text-[var(--text-color-ink-400)]" />
+            </div>
             <h1 className="text-2xl font-bold text-[var(--text-color-ink)] mb-4">
               Post Not Found
             </h1>
@@ -238,16 +241,16 @@ const PostPage = () => {
                   <div className="flex space-x-3">
                     <button
                       onClick={handleEdit}
-                      className="px-4 py-2 border border-[var(--primary-color-royal)] text-[var(--primary-color-royal)] rounded-input font-medium hover:bg-[var(--primary-color-royal)] hover:text-white transition-colors"
+                      className="flex items-center gap-2 px-4 py-2 border border-[var(--primary-color-royal)] text-[var(--primary-color-royal)] rounded-input font-medium hover:bg-[var(--primary-color-royal)] hover:text-white transition-colors"
                     >
-                      Edit
+                      <Edit className="w-4 h-4" /> Edit
                     </button>
                     <button
                       onClick={handleDelete}
                       disabled={deleting}
-                      className="px-4 py-2 border border-red-500 text-red-500 rounded-input font-medium hover:bg-red-500 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center gap-2 px-4 py-2 border border-red-500 text-red-500 rounded-input font-medium hover:bg-red-500 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {deleting ? 'Deleting...' : 'Delete'}
+                      <Trash2 className="w-4 h-4" /> {deleting ? 'Deleting...' : 'Delete'}
                     </button>
                   </div>
                 )}
@@ -277,9 +280,9 @@ const PostPage = () => {
           <div className="mt-8 flex justify-between items-center">      
             <button
               onClick={() => navigate(-1)}
-              className="text-[var(--primary-color-royal)] hover:text-[var(--primary-color-royal-600)] font-medium transition-colors"
+              className="flex items-center gap-2 text-[var(--primary-color-royal)] hover:text-[var(--primary-color-royal-600)] font-medium transition-colors"
             >
-              ← Back
+              <ChevronLeft className="w-5 h-5" /> Back
             </button>
           </div>
         </div>

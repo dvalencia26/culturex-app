@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import Breadcrumbs from '../../components/ui/Breadcrumbs';
 import CityButton from '../../components/ui/CityButton';
 import postService from '../../services/postService';
+import { threadService } from '../../services/threadService';
 import { toast } from 'sonner';
 import PostCard from './PostCard';
 import { getFlagEmoji } from '../../utils/countryUtils';
@@ -30,6 +31,8 @@ const CountryPage = () => {
   const [countryName, setCountryName] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingCities, setLoadingCities] = useState(false);
+  const [threadCount, setThreadCount] = useState(0);
+  const [loadingThreads, setLoadingThreads] = useState(false);
 
   // Load country data
   useEffect(() => {
@@ -100,6 +103,30 @@ const CountryPage = () => {
     loadCountryData();
   }, [countryCode]);
 
+  // Check if there are threads for this country
+  useEffect(() => {
+    const checkThreads = async () => {
+      if (!countryCode) return;
+      
+      setLoadingThreads(true);
+      try {
+        const result = await threadService.getThreadsByCountry(countryCode.toUpperCase(), { 
+          limit: 1 
+        });
+        
+        if (result.success) {
+          setThreadCount(result.data.total_count || 0);
+        }
+      } catch (error) {
+        console.error('Error checking threads:', error);
+      } finally {
+        setLoadingThreads(false);
+      }
+    };
+
+    checkThreads();
+  }, [countryCode]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[var(--color-background-snow)] font-ui">
@@ -141,6 +168,36 @@ const CountryPage = () => {
               Explore travel experiences and cultural insights from {countryName}
             </p>
           </div>
+
+          {/* Thread Navigation Buttons */}
+          {!loadingThreads && (
+            <div className="mb-8">
+              {threadCount > 0 ? (
+                <div className="flex justify-center gap-4">
+                  <button
+                    onClick={() => navigate(`/countries/${countryCode}/threads`)}
+                    className="bg-[var(--primary-color-royal)] text-white px-6 py-3 rounded-input font-semibold hover:bg-[var(--primary-color-royal-600)] transition-colors flex items-center gap-2"
+                  >
+                    View all Threads ({threadCount})
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-[var(--color-background-cream)] border border-[var(--color-border-sand)] rounded-lg p-6 max-w-2xl mx-auto text-center">
+                  <p className="text-[var(--text-color-ink-400)] mb-4">
+                    No discussions about {countryName} yet.
+                  </p>
+                  {user && (
+                    <button
+                      onClick={() => navigate(`/countries/${countryCode}/threads/new`)}
+                      className="bg-[var(--primary-color-royal)] text-white px-6 py-3 rounded-input font-semibold hover:bg-[var(--primary-color-royal-600)] transition-colors"
+                    >
+                      Read Threads about {countryName}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Cities with Posts */}
           {cities.length > 0 && (

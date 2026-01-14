@@ -1,12 +1,14 @@
 from django.shortcuts import render
 from rest_framework.generics import GenericAPIView
-from .serializers import LoginSerializer, UserRegisterSerializer, PasswordResetRequestSerializer, SetNewPasswordSerializer, LogoutUserSerializer, ProfileSerializer, PostSerializer
+from .serializers import (LoginSerializer, UserRegisterSerializer, PasswordResetRequestSerializer, 
+                          SetNewPasswordSerializer, LogoutUserSerializer, ProfileSerializer, PostSerializer,
+                          ThreadCategorySerializer, ThreadSubcategorySerializer, ThreadSerializer, ThreadReplySerializer)
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from .utils import send_code_via_email
-from .models import OneTimePassword, User, Profile, Post
+from .models import OneTimePassword, User, Profile, Post, ThreadCategory, ThreadSubcategory, Thread, ThreadReply
 from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import smart_str, DjangoUnicodeDecodeError
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
@@ -17,7 +19,7 @@ from django.conf import settings
 from django.db import models
 from cities_light.models import Country, City
 from django_countries import countries as django_countries
-
+from django.db.models import Count
 
 class RegisterUserView(GenericAPIView):
     serializer_class = UserRegisterSerializer
@@ -699,3 +701,385 @@ def get_cities_by_country(request, country_code):
         return Response({
             'error': f'Error fetching cities: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# THREAD VIEWS
+
+# Thread Category Views
+@api_view(['GET'])
+def thread_category_list(request):
+    """Get all active thread categories"""
+    try:
+        categories = ThreadCategory.objects.filter(is_active=True).prefetch_related('subcategories')
+        serializer = ThreadCategorySerializer(categories, many=True, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def thread_category_detail(request, slug):
+    """Get a specific thread category by slug"""
+    try:
+        category = ThreadCategory.objects.get(slug=slug, is_active=True)
+        serializer = ThreadCategorySerializer(category, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except ThreadCategory.DoesNotExist:
+        return Response({'error': 'Category not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# Thread Subcategory Views
+@api_view(['GET'])
+def thread_subcategory_list(request, category_slug):
+    """Get all active subcategories for a specific category"""
+    try:
+        category = ThreadCategory.objects.get(slug=category_slug, is_active=True)
+        subcategories = ThreadSubcategory.objects.filter(category=category, is_active=True)
+        serializer = ThreadSubcategorySerializer(subcategories, many=True, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except ThreadCategory.DoesNotExist:
+        return Response({'error': 'Category not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# Thread Views
+@api_view(['GET', 'POST'])
+def thread_list_create(request):
+    """
+    GET: List all threads with filtering options
+    POST: Create a new thread (authenticated users only)
+    """
+    if request.method == 'GET':
+        try:
+            # Base query
+            threads = Thread.objects.select_related(
+                'author__profile', 'category', 'subcategory'
+            ).prefetch_related('replies').all().order_by('-is_pinned', '-created_at')
+            
+            # Filters
+            category_slug = request.GET.get('category')
+            subcategory_slug = request.GET.get('subcategory')
+            country = request.GET.get('country')
+            author = request.GET.get('author')
+            search = request.GET.get('search')
+            is_pinned = request.GET.get('is_pinned')
+            
+            # Apply filters: Search by slugs, country code, author username, text search, pinned status
+            if category_slug:
+                threads = threads.filter(category__slug=category_slug)
+            
+            if subcategory_slug:
+                threads = threads.filter(subcategory__slug=subcategory_slug)
+            
+            if country:
+                # CountryField stores as 2-letter code (e.g., 'EC', 'US')
+                threads = threads.filter(country=country.upper())
+            
+            if author:
+                threads = threads.filter(author__profile__username=author)
+            
+            if search:
+                threads = threads.filter(
+                    models.Q(title__icontains=search) | 
+                    models.Q(content__icontains=search)
+                )
+            
+            if is_pinned:
+                threads = threads.filter(is_pinned=is_pinned.lower() == 'true')
+            
+            # Pagination
+            limit = int(request.GET.get('limit', 20))
+            offset = int(request.GET.get('offset', 0))
+            
+            total_count = threads.count()
+            threads = threads[offset:offset + limit]
+            
+            serializer = ThreadSerializer(threads, many=True, context={'request': request})
+            
+            return Response({
+                'threads': serializer.data,
+                'total_count': total_count,
+                'limit': limit,
+                'offset': offset,
+                'has_more': (offset + limit) < total_count
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    elif request.method == 'POST':
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        try:
+            serializer = ThreadSerializer(data=request.data, context={'request': request})
+            if serializer.is_valid():
+                serializer.save(author=request.user)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def get_user_threads(request, username):
+    """Get all threads by a specific user"""
+    try:
+        profile = Profile.objects.get(username=username)
+        threads = Thread.objects.filter(author=profile.user).select_related(
+            'category', 'subcategory'
+        ).order_by('-created_at')
+        
+        # Pagination
+        limit = int(request.GET.get('limit', 20))
+        offset = int(request.GET.get('offset', 0))
+        
+        total_count = threads.count()
+        threads = threads[offset:offset + limit]
+        
+        serializer = ThreadSerializer(threads, many=True, context={'request': request})
+        
+        return Response({
+            'threads': serializer.data,
+            'total_count': total_count,
+            'limit': limit,
+            'offset': offset,
+            'has_more': (offset + limit) < total_count
+        }, status=status.HTTP_200_OK)
+        
+    except Profile.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
+def thread_detail(request, username, slug):
+    """
+    GET: Retrieve a specific thread by username and slug
+    PUT/PATCH: Update a thread (only author can update)
+    DELETE: Delete a thread (only author can delete)
+    """
+    try:
+        profile = Profile.objects.get(username=username)
+        thread = Thread.objects.select_related('author__profile', 'category', 'subcategory').get(
+            author=profile.user, slug=slug
+        )
+        
+        if request.method == 'GET':
+            # Increment view count
+            thread.view_count += 1
+            thread.save(update_fields=['view_count'])
+            
+            serializer = ThreadSerializer(thread, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        elif request.method in ['PUT', 'PATCH']:
+            # Only author can update
+            if not request.user.is_authenticated:
+                return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            if request.user != thread.author:
+                return Response({'error': 'You can only edit your own threads'}, status=status.HTTP_403_FORBIDDEN)
+            
+            # Check if thread is locked
+            if thread.is_locked:
+                return Response({'error': 'This thread is locked and cannot be edited'}, status=status.HTTP_403_FORBIDDEN)
+            
+            partial = request.method == 'PATCH'
+            serializer = ThreadSerializer(thread, data=request.data, partial=partial, context={'request': request})
+            
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        elif request.method == 'DELETE':
+            # Only author can delete
+            if not request.user.is_authenticated:
+                return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            if request.user != thread.author:
+                return Response({'error': 'You can only delete your own threads'}, status=status.HTTP_403_FORBIDDEN)
+            
+            thread.delete()
+            return Response({'message': 'Thread deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+    
+    except Profile.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Thread.DoesNotExist:
+        return Response({'error': 'Thread not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_my_threads(request):
+    """Get all threads by the current authenticated user"""
+    try:
+        threads = Thread.objects.filter(author=request.user).select_related(
+            'category', 'subcategory'
+        ).order_by('-created_at')
+        
+        # Pagination
+        limit = int(request.GET.get('limit', 20))
+        offset = int(request.GET.get('offset', 0))
+        
+        total_count = threads.count()
+        threads = threads[offset:offset + limit]
+        
+        serializer = ThreadSerializer(threads, many=True, context={'request': request})
+        
+        return Response({
+            'threads': serializer.data,
+            'total_count': total_count,
+            'limit': limit,
+            'offset': offset,
+            'has_more': (offset + limit) < total_count
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# Thread Reply Views
+@api_view(['GET', 'POST'])
+def thread_reply_list_create(request, username, slug):
+    """
+    GET: Get all replies for a thread
+    POST: Create a new reply (authenticated users only)
+    """
+    try:
+        profile = Profile.objects.get(username=username)
+        thread = Thread.objects.get(author=profile.user, slug=slug)
+        
+        if request.method == 'GET':
+            # Get all top-level replies (no parent_reply)
+            replies = ThreadReply.objects.filter(thread=thread, parent_reply=None).select_related(
+                'author__profile'
+            ).prefetch_related('child_replies').order_by('created_at')
+            
+            serializer = ThreadReplySerializer(replies, many=True, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        elif request.method == 'POST':
+            if not request.user.is_authenticated:
+                return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            # Check if thread is locked
+            if thread.is_locked:
+                return Response({'error': 'This thread is locked and cannot receive new replies'}, 
+                              status=status.HTTP_403_FORBIDDEN)
+            
+            serializer = ThreadReplySerializer(data=request.data, context={'request': request})
+            if serializer.is_valid():
+                serializer.save(author=request.user, thread=thread)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    except Profile.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Thread.DoesNotExist:
+        return Response({'error': 'Thread not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
+def thread_reply_detail(request, reply_id):
+    """
+    GET: Get a specific reply
+    PUT/PATCH: Update a reply (only author can update)
+    DELETE: Delete a reply (only author can delete)
+    """
+    try:
+        reply = ThreadReply.objects.select_related('author__profile', 'thread').get(id=reply_id)
+        
+        if request.method == 'GET':
+            serializer = ThreadReplySerializer(reply, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        elif request.method in ['PUT', 'PATCH']:
+            if not request.user.is_authenticated:
+                return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            if request.user != reply.author:
+                return Response({'error': 'You can only edit your own replies'}, status=status.HTTP_403_FORBIDDEN)
+            
+            # Check if thread is locked
+            if reply.thread.is_locked:
+                return Response({'error': 'This thread is locked and replies cannot be edited'}, 
+                              status=status.HTTP_403_FORBIDDEN)
+            
+            partial = request.method == 'PATCH'
+            serializer = ThreadReplySerializer(reply, data=request.data, partial=partial, context={'request': request})
+            
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        elif request.method == 'DELETE':
+            if not request.user.is_authenticated:
+                return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            if request.user != reply.author:
+                return Response({'error': 'You can only delete your own replies'}, status=status.HTTP_403_FORBIDDEN)
+            
+            reply.delete()
+            return Response({'message': 'Reply deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+    
+    except ThreadReply.DoesNotExist:
+        return Response({'error': 'Reply not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def get_nested_replies(request, reply_id):
+    """Get all nested replies (children) for a specific reply"""
+    try:
+        parent_reply = ThreadReply.objects.get(id=reply_id)
+        child_replies = ThreadReply.objects.filter(parent_reply=parent_reply).select_related(
+            'author__profile'
+        ).order_by('created_at')
+        
+        serializer = ThreadReplySerializer(child_replies, many=True, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    except ThreadReply.DoesNotExist:
+        return Response({'error': 'Reply not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+
+@api_view(['GET'])
+def popular_countries(request):
+    """Get top countries with most threads"""
+    limit = int(request.GET.get('limit', 5))
+    try:
+        # Annotate countries with thread counts
+        country_thread_counts = Thread.objects.values('country').annotate(
+            thread_count=Count('id')
+        ).order_by('-thread_count')[:limit]  # Top 5 countries 
+        
+        countries_data = []
+        for item in country_thread_counts:
+            if item['country']:
+                countries_data.append({
+                    'code': item['country'],
+                    'name': dict(django_countries).get(item['country'], 'Unknown'),
+                    'thread_count': item['thread_count']
+                })
+        
+        return Response({
+            'countries': countries_data,
+            'limit': limit
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

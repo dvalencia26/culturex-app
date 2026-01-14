@@ -227,3 +227,179 @@ class Post(models.Model):
         constraints = [
             models.UniqueConstraint(fields=['user', 'slug'], name='unique_user_slug')
         ]
+
+
+'''
+Threads/Discussion models 
+'''
+
+class ThreadCategory(models.Model):
+    """Main category (e.g., General, Regional, Specialized Topics)"""
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(unique=True, max_length=200, blank=True)
+    description = models.TextField(blank=True)
+    icon = models.CharField(max_length=50, blank=True)  # Icon class name
+    display_order = models.PositiveIntegerField(default=0) # Order for display
+    is_active = models.BooleanField(default=True) # Set if category is visible to users
+    
+    class Meta:
+        ordering = ['display_order', 'name']
+        verbose_name_plural = "Thread Categories"
+    
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return self.name
+
+
+class ThreadSubcategory(models.Model):
+    """Subcategory for more specific topics"""
+    category = models.ForeignKey(
+        ThreadCategory, 
+        on_delete=models.CASCADE,
+        related_name='subcategories'
+    )
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(max_length=200, blank=True)
+    description = models.TextField(blank=True)
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    
+    class Meta:
+        ordering = ['display_order', 'name']
+        unique_together = ['category', 'slug']
+        verbose_name_plural = "Thread Subcategories"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"{self.category.name} - {self.name}"
+
+
+class Thread(models.Model):
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=250, blank=True)
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='threads')
+    
+    # Location context
+    country = CountryField(blank=True, null=True, help_text="Country related to this thread")
+    
+    
+    # Categorization of threads
+    category = models.ForeignKey(
+        ThreadCategory,
+        on_delete=models.PROTECT,   # Prevent deletion if threads exist
+        related_name='threads'
+    )
+    subcategory = models.ForeignKey(
+        ThreadSubcategory,
+        on_delete=models.SET_NULL, 
+        null=True,
+        blank=True,
+        related_name='threads'
+    )
+    
+    # Content
+    content = models.TextField()
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    view_count = models.PositiveIntegerField(default=0) # Track number of views
+    is_pinned = models.BooleanField(default=False) # Pinned threads appear at top
+    is_locked = models.BooleanField(default=False) # Locked threads cannot receive new replies
+    
+    class Meta:
+        ordering = ['-is_pinned', '-created_at']
+        indexes = [
+            models.Index(fields=['country', '-created_at']),
+            models.Index(fields=['category', '-created_at']),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=['author', 'slug'], name='unique_thread_slug_per_author')
+        ]
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = self.generate_unique_slug()
+        super().save(*args, **kwargs)
+
+    def generate_unique_slug(self):
+        """Generate a unique slug per author from the title"""
+        base_slug = slugify(self.title)
+
+        if not base_slug:  # If title has no valid characters 
+            base_slug = f"thread-{self.author.id}" 
+        
+        # Make slug unique per author
+        slug = base_slug
+        counter = 1
+        
+        while Thread.objects.filter(author=self.author, slug=slug).exists():
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+        
+        return slug
+    
+    def get_absolute_url(self):
+        """Return the URL for this thread"""
+        try:
+            username = self.author.profile.username
+        except Profile.DoesNotExist:
+            username = self.author.email.split('@')[0]
+        
+        return f"/u/{username}/threads/{self.slug}/"
+    
+    @property
+    def reply_count(self):
+        return self.replies.count()
+    
+    @property
+    def author_username(self):
+        try:
+            return self.author.profile.username
+        except Profile.DoesNotExist:
+            return self.author.email.split('@')[0]
+        
+    def __str__(self):
+        return self.title
+
+
+class ThreadReply(models.Model):
+    thread = models.ForeignKey(
+        Thread,
+        on_delete=models.CASCADE,
+        related_name='replies'
+    )
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='thread_replies')
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    # Nested replies
+    parent_reply = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='child_replies'
+    )
+    
+    class Meta:
+        ordering = ['created_at']
+        verbose_name_plural = "Thread Replies"
+
+    @property
+    def author_username(self):
+        try:
+            return self.author.profile.username
+        except Profile.DoesNotExist:
+            return self.author.email.split('@')[0]
+    
+    def __str__(self):
+        return f"Reply by {self.author_username} on {self.thread.title}"

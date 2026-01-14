@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { getFlagEmoji } from '../../utils/countryUtils';
+import { MapPin, Flag, Globe, ChevronRight } from 'lucide-react';
 
 /**
  * PostCard Component
@@ -26,16 +27,16 @@ const PostCard = ({ post, showLocationBadge = true }) => {
 
     if (post.location_scope === 'city' && post.city_name) {
       return (
-        <span className="bg-[var(--color-gold)] text-[var(--color-white)] px-3 py-1 rounded-pill text-sm font-medium">
-          📍 {post.city_name}
+        <span className="flex items-center gap-1 bg-[var(--color-gold)] text-[var(--color-white)] px-3 py-1 rounded-pill text-sm font-medium">
+          <MapPin className="w-3.5 h-3.5" /> {post.city_name}
         </span>
       );
     }
     
     if (post.location_scope === 'country' && post.country_name) {
-      const flagEmoji = post.country_code ? getFlagEmoji(post.country_code) : '🏳️';
+      const flagEmoji = post.country_code ? getFlagEmoji(post.country_code) : <Flag className="w-3.5 h-3.5" />;
       return (
-        <span className="bg-[var(--primary-color-royal)] text-[var(--color-white)] px-3 py-1 rounded-pill text-sm font-medium">
+        <span className="flex items-center gap-1 bg-[var(--primary-color-royal)] text-[var(--color-white)] px-3 py-1 rounded-pill text-sm font-medium">
           {flagEmoji} {post.country_name}
         </span>
       );
@@ -43,8 +44,8 @@ const PostCard = ({ post, showLocationBadge = true }) => {
     
     if (post.location_scope === 'none') {
       return (
-        <span className="bg-[var(--secondary-color-orchid)] text-[var(--color-white)] px-3 py-1 rounded-pill text-sm font-medium">
-          🌍 Global
+        <span className="flex items-center gap-1 bg-[var(--secondary-color-orchid)] text-[var(--color-white)] px-3 py-1 rounded-pill text-sm font-medium">
+          <Globe className="w-3.5 h-3.5" /> Global
         </span>
       );
     }
@@ -105,7 +106,7 @@ const PostCard = ({ post, showLocationBadge = true }) => {
           onClick={handleReadMore}
           className="text-[var(--primary-color-royal)] hover:text-[var(--primary-color-royal-600)] font-medium transition-colors"
         >
-          Read More →
+          Read More <ChevronRight className="w-4 h-4 inline-block" />
         </button>
       </div>
     </div>

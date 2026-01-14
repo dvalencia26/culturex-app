@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Profile, Post
+from .models import User, Profile, Post, ThreadCategory, ThreadSubcategory, Thread, ThreadReply
 from django.contrib.auth import authenticate
 from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
@@ -297,7 +297,7 @@ class PostSerializer(serializers.ModelSerializer):
                 # Author info (read-only)
                 'author_username', 'author_full_name', 'author_profile_image',
                 # Location display names (read-only)
-                'country_name', 'country_code', 'country_flag', 'city_name',
+                'country_name', 'country_code', 'country_flag', 'city_name'
             ]
             # These fields are read-only and cannot be modified by the user
             read_only_fields = [
@@ -305,3 +305,139 @@ class PostSerializer(serializers.ModelSerializer):
                 'author_username', 'author_full_name', 'author_profile_image',
                 'country_name', 'country_code', 'country_flag', 'city_name'
             ]
+
+
+# Thread Serializers
+class ThreadCategorySerializer(serializers.ModelSerializer):
+    """Serializer for thread categories"""
+    subcategories_count = serializers.SerializerMethodField()
+    threads_count = serializers.SerializerMethodField()
+    
+    def get_subcategories_count(self, obj):
+        """Get count of active subcategories"""
+        return obj.subcategories.filter(is_active=True).count()
+    
+    def get_threads_count(self, obj):
+        """Get count of threads in this category"""
+        return obj.threads.count()
+    
+    class Meta:
+        model = ThreadCategory
+        fields = ['id', 'name', 'slug', 'description', 'display_order', 'is_active', 'subcategories_count', 'threads_count']
+        read_only_fields = ['slug']
+
+
+class ThreadSubcategorySerializer(serializers.ModelSerializer):
+    """Serializer for thread subcategories"""
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    category_slug = serializers.CharField(source='category.slug', read_only=True)
+    threads_count = serializers.SerializerMethodField()
+    
+    def get_threads_count(self, obj):
+        """Get count of threads in this subcategory"""
+        return obj.threads.count()
+    
+    class Meta:
+        model = ThreadSubcategory
+        fields = ['id', 'name', 'slug', 'description', 'display_order', 'is_active', 
+                  'category', 'category_name', 'category_slug', 'threads_count']
+        read_only_fields = ['slug']
+
+
+class ThreadReplySerializer(serializers.ModelSerializer):
+    """Serializer for thread replies"""
+    author_username = serializers.CharField(source='author_username', read_only=True)
+    author_full_name = serializers.CharField(source='author.get_full_name', read_only=True)
+    author_profile_image = serializers.SerializerMethodField()
+    child_replies_count = serializers.SerializerMethodField()
+    
+    def get_author_profile_image(self, obj):
+        request = self.context.get('request')
+        if hasattr(obj.author, 'profile'):
+            return get_full_image_url(request, obj.author.profile.profile_image)
+        return None
+    
+    def get_child_replies_count(self, obj):
+        """Get count of nested replies"""
+        return obj.child_replies.count()
+    
+    class Meta:
+        model = ThreadReply
+        fields = ['id', 'thread', 'author', 'author_username', 'author_full_name', 
+                  'author_profile_image', 'content', 'created_at', 'updated_at', 
+                  'parent_reply', 'child_replies_count']
+        read_only_fields = ['author', 'created_at', 'updated_at']
+
+
+class ThreadSerializer(serializers.ModelSerializer):
+    """Serializer for threads"""
+    author_username = serializers.ReadOnlyField()  # This is a @property
+    author_full_name = serializers.CharField(source='author.get_full_name', read_only=True)
+    author_profile_image = serializers.SerializerMethodField()
+    
+    # Category info
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    category_slug = serializers.CharField(source='category.slug', read_only=True)
+    subcategory_name = serializers.CharField(source='subcategory.name', read_only=True, allow_null=True)
+    subcategory_slug = serializers.CharField(source='subcategory.slug', read_only=True, allow_null=True)
+    
+    country = serializers.CharField(allow_blank=True, allow_null=True, required=False) # Returns the country code only
+    country_name = serializers.SerializerMethodField()
+    country_code = serializers.SerializerMethodField()
+    country_flag = serializers.SerializerMethodField()
+    
+    # Other fields
+    reply_count = serializers.ReadOnlyField()
+    absolute_url = serializers.CharField(source='get_absolute_url', read_only=True)
+    slug = serializers.SlugField(read_only=True)
+    
+    def get_author_profile_image(self, obj):
+        request = self.context.get('request')
+        if hasattr(obj.author, 'profile'):
+            return get_full_image_url(request, obj.author.profile.profile_image)
+        return None
+    
+    def get_country_name(self, obj):
+        if obj.country:
+            return obj.country.name
+        return None
+    
+    def get_country_code(self, obj):
+        if obj.country:
+            return obj.country.code
+        return None
+    
+    def get_country_flag(self, obj):
+        if obj.country:
+            return obj.country.flag
+        return None
+    
+    def create(self, validated_data):
+        """Create thread with model validation"""
+        thread = Thread(**validated_data)
+        thread.full_clean()
+        thread.save()
+        return thread
+    
+    class Meta:
+        model = Thread
+        fields = [
+            # Writable fields
+            'title', 'content', 'country', 'category', 'subcategory',
+            # Read-only fields
+            'id', 'slug', 'created_at', 'updated_at', 'view_count', 'is_pinned', 
+            'is_locked', 'absolute_url', 'reply_count',
+            # Author info
+            'author_username', 'author_full_name', 'author_profile_image',
+            # Category info
+            'category_name', 'category_slug', 'subcategory_name', 'subcategory_slug',
+            # Location info
+            'country_name', 'country_code', 'country_flag'
+        ]
+        read_only_fields = [
+            'id', 'slug', 'created_at', 'updated_at', 'view_count', 'is_pinned', 
+            'is_locked', 'absolute_url', 'reply_count',
+            'author_username', 'author_full_name', 'author_profile_image',
+            'category_name', 'category_slug', 'subcategory_name', 'subcategory_slug',
+            'country_name', 'country_code', 'country_flag'
+        ]
