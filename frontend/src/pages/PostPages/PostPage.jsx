@@ -71,7 +71,6 @@ const PostPage = () => {
   const handleEdit = () => {
     // Navigate to edit page 
     navigate(`/profile/${username}/posts/${slug}/edit`);
-    toast.info('Edit functionality coming soon!');
   };
 
   const handleDelete = async () => {
@@ -232,6 +231,7 @@ const PostPage = () => {
                     </p>
                     <p className="text-sm text-[var(--text-color-ink-400)]">
                       Posted on {dayjs(post.created_at).format('MMMM D, YYYY')}
+                      {post.created_at !== post.updated_at && " (edited)"}
                     </p>
                   </div>
                 </div>

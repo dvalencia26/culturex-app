@@ -8,7 +8,7 @@ import { ReplyList } from "../../components/ThreadComponents";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { getFlagEmoji } from "../../utils/countryUtils";
-import { Pin, Lock, MessageSquare, Eye } from "lucide-react";
+import { Pin, Lock, MessageSquare, Eye, ChevronLeft } from "lucide-react";
 
 dayjs.extend(relativeTime);
 
@@ -171,6 +171,14 @@ const ThreadDetailPage = () => {
           <div className="mb-6">
             <Breadcrumbs />
           </div>
+
+          {/* Back Button */}
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-2 text-[var(--primary-color-royal)] hover:text-[var(--primary-color-royal-600)] font-medium transition-colors mb-6"
+          >
+            <ChevronLeft className="w-5 h-5" /> Back
+          </button>
 
           {/* Thread Content */}
           <div className="bg-white rounded-card shadow-card p-8 mb-6">

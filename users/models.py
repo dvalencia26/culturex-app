@@ -187,6 +187,16 @@ class Post(models.Model):
                 raise ValidationError(f"Selected city is in {city_country_code}, but country is set to {primary_country_code}")
         
     def save(self, *args, **kwargs):
+        # Update slug after edits to title
+        if self.pk:
+            try:
+                old_post = Post.objects.get(pk=self.pk)
+                if old_post.title != self.title:
+                    # Title changed, create new slug
+                    self.slug = self.generate_unique_slug()
+            except Post.DoesNotExist:
+                pass
+        
         # Auto-generate slug from title so user doesn't have to write it manually
         if not self.slug:
             self.slug = self.generate_unique_slug()
@@ -325,8 +335,20 @@ class Thread(models.Model):
             models.UniqueConstraint(fields=['author', 'slug'], name='unique_thread_slug_per_author')
         ]
     def save(self, *args, **kwargs):
+        # Update slug after edits to title
+        if self.pk:
+            try:
+                old_thread = Thread.objects.get(pk=self.pk)
+                if old_thread.title != self.title:
+                    # Title changed, create new slug
+                    self.slug = self.generate_unique_slug()
+            except Thread.DoesNotExist:
+                pass
+        
+        # Generate slug for newly created threads
         if not self.slug:
             self.slug = self.generate_unique_slug()
+        
         super().save(*args, **kwargs)
 
     def generate_unique_slug(self):

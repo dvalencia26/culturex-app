@@ -11,8 +11,10 @@ import CountryPage from './pages/PostPages/CountryPage'
 import CityPage from './pages/PostPages/CityPage'
 //import GlobalPage from './pages/PostPages/GlobalPage'
 import PostPage from './pages/PostPages/PostPage'
+import EditPostPage from './pages/PostPages/EditPostPage'
 import CountryThreadPage from './pages/ThreadPages/CountryThreadPage'
 import ThreadDetailPage from './pages/ThreadPages/ThreadDetailPage'
+import EditThreadPage from './pages/ThreadPages/EditThreadPage'
 import ThreadPage from './pages/ThreadPages/ThreadPage'
 import CreatePostPage from './pages/PostPages/CreatePostPage'
 import CreateThreadPage from './pages/ThreadPages/CreateThreadPage'
@@ -55,9 +57,19 @@ function App() {
           <Route path="/threads" element={<ThreadPage />} />
           <Route path="/countries/:countryCode/threads" element={<CountryThreadPage />} />
           <Route path="/u/:username/threads/:slug" element={<ThreadDetailPage />} />
+          <Route path="/u/:username/threads/:slug/edit" element={
+            <ProtectedRoute>
+              <EditThreadPage />
+            </ProtectedRoute>
+          } />
           
           {/* Individual Post Page (Public) */}
           <Route path="/profile/:username/posts/:slug" element={<PostPage />} />
+          <Route path="/profile/:username/posts/:slug/edit" element={
+            <ProtectedRoute>
+              <EditPostPage />
+            </ProtectedRoute>
+          } />
 
           {/* Redirect all unknown routes to a 404 page */}
           <Route path="*" element={<PageNotFound />} />

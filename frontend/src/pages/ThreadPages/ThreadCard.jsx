@@ -32,7 +32,7 @@ const ThreadCard = ({ thread, showLocationBadge = false, showCategory = true }) 
   return (
     <div
       onClick={handleCardClick}
-      className="bg-white border border-[var(--color-border-sand)] rounded-lg p-6 hover:shadow-lg transition-shadow cursor-pointer"
+      className="bg-white shadow-md rounded-lg p-6 hover:shadow-xl transition-shadow cursor-pointer"
     >
       {/* Header Section */}
       <div className="flex items-start justify-between mb-3">

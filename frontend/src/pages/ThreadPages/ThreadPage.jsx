@@ -32,6 +32,7 @@ const ThreadPage = () => {
 
   // Loading states
   const [loading, setLoading] = useState(false);
+  const [showLoading, setShowLoading] = useState(false); // For delayed loader display
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [loadingSubcategories, setLoadingSubcategories] = useState(false);
 
@@ -114,6 +115,11 @@ const ThreadPage = () => {
     const loadThreads = async () => {
       setLoading(true);
 
+      // Delay showing loader to prevent small black flash on quick loads
+      const loaderTimer = setTimeout(() => {
+        setShowLoading(true);
+      }, 200); // 200ms delay
+
       try {
         // Build filter object for API call
         const filters = {
@@ -142,7 +148,9 @@ const ThreadPage = () => {
         setThreads([]);
         setTotalCount(0);
       } finally {
+        clearTimeout(loaderTimer);
         setLoading(false);
+        setShowLoading(false);
       }
     };
 
@@ -311,7 +319,7 @@ const ThreadPage = () => {
               </div>
 
               {/* Loading State */}
-              {loading && threads.length === 0 ? (
+              {showLoading && threads.length === 0 ? (
                 <Loader message='Loading...' />
               
               ) : threads.length > 0 ? (
