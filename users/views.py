@@ -1083,3 +1083,24 @@ def popular_countries(request):
         
     except Exception as e:
         return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+
+@api_view(['GET'])
+def get_all_countries(request):
+    """
+    Get all countries. This endpoint is used for Post and Thread country selection dropdowns.
+    """
+    try:
+        countries_data = [{
+            'code': code,
+            'name': name
+        } for code, name in django_countries]
+        
+        return Response({
+            'countries': countries_data,
+            'count': len(countries_data)
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    

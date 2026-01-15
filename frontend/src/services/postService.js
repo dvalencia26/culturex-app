@@ -223,7 +223,7 @@ export const postService = {
   // Get countries for post creation (based on location scope)
   getCountriesForPosts: async (locationScope = 'country') => {
     try {
-      const response = await axiosInstance.get(`/auth/countries/?location_scope=${locationScope}`);
+      const response = await axiosInstance.get(`/auth/countries-for-posts/?location_scope=${locationScope}`);
       return response.data; // Return data directly for simpler usage
     } catch (error) {
       throw new Error(error.response?.data?.error || 'Failed to fetch countries');

@@ -11,7 +11,7 @@ from .views import (
     thread_category_list, thread_category_detail, thread_subcategory_list,
     thread_list_create, get_user_threads, thread_detail, get_my_threads,
     thread_reply_list_create, thread_reply_detail, get_nested_replies,
-    popular_countries,
+    popular_countries, get_all_countries,
 )
 
 urlpatterns = [
@@ -46,7 +46,8 @@ urlpatterns = [
     path('profile/<str:username>/posts/<slug:slug>/', post_detail, name='post-detail'),  # GET/PUT/PATCH/DELETE: Specific post
 
     # Location Data
-    path('countries/', get_countries_for_posts, name='countries-for-posts'),  # GET: Countries based on location scope
+    path('countries/', get_all_countries, name='all-countries'),  # GET: All countries
+    path('countries-for-posts/', get_countries_for_posts, name='countries-for-posts'),  # GET: Countries based on location scope
     path('countries-with-posts/', get_countries_with_posts, name='countries-with-posts'),  # GET: Countries that have posts
     path('countries/<str:country_code>/cities/', get_cities_by_country, name='cities-by-country'),  # GET: Cities for country
     path('countries/<str:country_code>/cities-with-posts/', get_cities_with_posts_by_country, name='cities-with-posts'),  # GET: Cities with posts

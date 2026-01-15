@@ -210,7 +210,7 @@ const ThreadPage = () => {
 
   // Go to thread page that cointains the form to create a new thread
   const handleCreateThread = () => {
-    navigate('/threads/new');
+    navigate('/create-thread');
   };
 
 

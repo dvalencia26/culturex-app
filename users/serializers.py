@@ -239,6 +239,10 @@ class PostSerializer(serializers.ModelSerializer):
     updated_at = serializers.DateTimeField(read_only=True) # Read-only, set on update
     # get the profile image of the user who created the post
 
+    # Override primary_country to return country code string instead of Country object
+    # this prevents  Django from trying to serialize the Country object which caused a Json error
+    primary_country = serializers.CharField(allow_blank=True, allow_null=True, required=False)
+    
     # Location display fields
     country_name = serializers.SerializerMethodField()
     country_code = serializers.SerializerMethodField()
@@ -375,7 +379,19 @@ class ThreadSerializer(serializers.ModelSerializer):
     author_full_name = serializers.CharField(source='author.get_full_name', read_only=True)
     author_profile_image = serializers.SerializerMethodField()
     
-    # Category info
+    # Change category and subcategory to use slugs instead of IDs. This makes it easier to read the data on frontend.
+    category = serializers.SlugRelatedField(
+        slug_field='slug',
+        queryset=ThreadCategory.objects.filter(is_active=True)
+    )
+    subcategory = serializers.SlugRelatedField(
+        slug_field='slug',
+        queryset=ThreadSubcategory.objects.filter(is_active=True),
+        allow_null=True,
+        required=False
+    )
+    
+    # Category info (convenience fields for display)
     category_name = serializers.CharField(source='category.name', read_only=True)
     category_slug = serializers.CharField(source='category.slug', read_only=True)
     subcategory_name = serializers.CharField(source='subcategory.name', read_only=True, allow_null=True)
