@@ -10,7 +10,6 @@ dayjs.extend(relativeTime); // relative time plugin for "fromNow" functionality
  * ThreadCard Component:
  * Displays a thread preview card with title, author, category, and other fields
  * Used in Country Thread Page.
-
  */
 
 const ThreadCard = ({ thread, showLocationBadge = false, showCategory = true }) => {

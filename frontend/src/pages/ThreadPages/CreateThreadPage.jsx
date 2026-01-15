@@ -19,7 +19,7 @@ const CreateThreadPage = () => {
 
     const handleSuccess = (thread) => {
         // Navigate to the new created thread page
-        navigate(`/threads/${thread.username}/${thread.slug}`);
+        navigate(`/u/${thread.author_username}/threads/${thread.slug}`);
     };
 
  return (

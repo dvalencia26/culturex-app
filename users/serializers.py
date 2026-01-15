@@ -350,7 +350,7 @@ class ThreadSubcategorySerializer(serializers.ModelSerializer):
 
 class ThreadReplySerializer(serializers.ModelSerializer):
     """Serializer for thread replies"""
-    author_username = serializers.CharField(source='author_username', read_only=True)
+    author_username = serializers.ReadOnlyField()  # This is a property on ThreadReply model
     author_full_name = serializers.CharField(source='author.get_full_name', read_only=True)
     author_profile_image = serializers.SerializerMethodField()
     child_replies_count = serializers.SerializerMethodField()
@@ -370,7 +370,7 @@ class ThreadReplySerializer(serializers.ModelSerializer):
         fields = ['id', 'thread', 'author', 'author_username', 'author_full_name', 
                   'author_profile_image', 'content', 'created_at', 'updated_at', 
                   'parent_reply', 'child_replies_count']
-        read_only_fields = ['author', 'created_at', 'updated_at']
+        read_only_fields = ['author', 'thread', 'created_at', 'updated_at']
 
 
 class ThreadSerializer(serializers.ModelSerializer):

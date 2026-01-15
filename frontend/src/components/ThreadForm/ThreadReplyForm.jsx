@@ -1,7 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
-import { getReplySchema, transformReplyData } from './validationSchema';
+import { getReplySchema, transformReplyData } from './ThreadValidationSchema';
 import { threadService } from '../../services/threadService';
 
 /*
@@ -58,60 +58,63 @@ const ThreadReplyForm = ({
           onSuccess(result.data);
         }
       } else {
-        setSubmitError(result.error || 'Failed to post reply');
+        setSubmitError('Failed to post reply. Please try again.');
       }
     } catch (error) {
-      console.error('Reply submission error:', error);
-      setSubmitError('Network error. Please try again.');
+      setSubmitError('Network error. Please check your connection and try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
+    <form onSubmit={handleSubmit(onSubmit)}>
       {submitError && (
-        <div className="mb-3 p-3 bg-red-100 border border-red-400 text-red-700 rounded text-sm">
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
           {submitError}
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
-        <div>
-          <textarea
-            {...register('content')}
-            rows={4}
-            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              errors.content ? 'border-red-500' : 'border-gray-300'
-            }`}
-            placeholder={parentReplyId ? "Write your reply..." : "Share your thoughts..."}
-          />
-          {errors.content && (
-            <p className="mt-1 text-sm text-red-600">{errors.content.message}</p>
-          )}
-        </div>
+      {/* Textarea Container*/}
+      <div className="py-2 px-4 mb-4 bg-white rounded-lg border border-[var(--border-color-line)] focus-within:ring-2 focus-within:ring-[var(--primary-color-royal)] focus-within:border-[var(--primary-color-royal)]">
+        <label htmlFor="content" className="sr-only">Your comment</label>
+        <textarea
+          {...register('content')}
+          id="content"
+          rows={parentReplyId ? 3 : 4}
+          className={`px-0 w-full text-sm text-[var(--text-color-ink)] border-0 focus:ring-0 focus:outline-none placeholder-[var(--text-color-ink-400)] bg-transparent resize-none ${
+            errors.content ? 'placeholder-red-400' : ''
+          }`}
+          placeholder={parentReplyId ? "Write your reply..." : "Write a comment..."}
+        />
+      </div>
+      
+      {errors.content && (
+        <p className="mb-3 text-sm text-red-600">{errors.content.message}</p>
+      )}
 
-        <div className="flex justify-end space-x-2">
-          {onCancel && (
-            <button
-              type="button"
-              onClick={onCancel}
-              className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
-              disabled={isSubmitting}
-            >
-              Cancel
-            </button>
-          )}
+      {/* Post and Cancel Buttons */}
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          disabled={isSubmitting || !isValid}
+          className="inline-flex items-center py-2.5 px-4 text-xs font-medium text-center text-white bg-[var(--primary-color-royal)] rounded-lg hover:bg-[var(--primary-color-royal-600)] focus:ring-4 focus:ring-[var(--primary-color-royal)]/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {isSubmitting ? 'Posting...' : 'Post comment'}
+        </button>
+        
+        {onCancel && (
           <button
-            type="submit"
-            disabled={isSubmitting || !isValid}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+            type="button"
+            onClick={onCancel}
+            className="py-2.5 px-4 text-xs font-medium text-[var(--text-color-ink-400)] bg-[var(--color-background-snow)] rounded-lg hover:bg-[var(--border-color-line)] transition-colors"
+            disabled={isSubmitting}
           >
-            {isSubmitting ? 'Posting...' : 'Post Reply'}
+            Cancel
           </button>
-        </div>
-      </form>
-    </div>
+        )}
+      </div>
+    </form>
   );
 };
 

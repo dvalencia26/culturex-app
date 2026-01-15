@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate, Link} from 'react-router-dom'
+import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 
 const Signup = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { register, googleAuth, isLoading } = useAuth();
+
+  // Get the redirect path from location state, default to profile for new users 
+  const from = location.state?.from || '/profile';
   
   const [formData, setFormData] = useState({
     email: '',
@@ -23,8 +27,8 @@ const Signup = () => {
       const result = await googleAuth(token);
       
       if (result.success) {
-        // Navigate to profile after successful Google auth
-        navigate('/profile');
+        // Navigate to the redirect path after successful Google auth
+        navigate(from, { replace: true });
       }
     } catch (error) {
       console.error('Google signup error:', error);

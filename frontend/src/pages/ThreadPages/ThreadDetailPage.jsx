@@ -4,6 +4,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { threadService } from "../../services/threadService";
 import { toast } from "sonner";
 import Breadcrumbs from "../../components/ui/Breadcrumbs";
+import { ReplyList } from "../../components/ThreadComponents";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { getFlagEmoji } from "../../utils/countryUtils";
@@ -15,6 +16,7 @@ dayjs.extend(relativeTime);
  * ThreadDetailPage Component:
  * Displays Thread content with metadata, author information, and edit/delete thread from author.
  * URL: /u/{username}/threads/{slug}
+ * Uses reply list component to show replies and nested replies.
  */
 
 const ThreadDetailPage = () => {
@@ -25,6 +27,8 @@ const ThreadDetailPage = () => {
   const [thread, setThread] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [replies, setReplies] = useState([]);
+  const [loadingReplies, setLoadingReplies] = useState(false);
 
   // Fetch thread details
   useEffect(() => {
@@ -55,6 +59,27 @@ const ThreadDetailPage = () => {
     fetchThreadDetails();
   }, [username, slug]);
 
+  // Fetch thread replies
+  useEffect(() => {
+    const fetchReplies = async () => {
+      if (!username || !slug) return;
+
+      setLoadingReplies(true);
+      try {
+        const result = await threadService.getThreadReplies(username, slug);
+        if (result.success) {
+          setReplies(result.data || []);
+        }
+      } catch (error) {
+        console.error("Error fetching replies:", error);
+      } finally {
+        setLoadingReplies(false);
+      }
+    };
+
+    fetchReplies();
+  }, [username, slug]);
+
 
   const handleDelete = async () => {
     if (!window.confirm("Are you sure you want to delete this thread?")) return;
@@ -76,6 +101,20 @@ const ThreadDetailPage = () => {
 
   const handleEdit = () => {
     navigate(`/u/${username}/threads/${slug}/edit`);
+  };
+
+  // Handle top-level reply from the main form
+  const handleReplySuccess = (newReply) => {
+    // If newReply is a top-level reply it gets added to list
+    // If reply is nested, count gets incremented
+    if (newReply) {
+      setReplies([...replies, newReply]);
+      toast.success("Reply posted successfully!");
+    }
+    setThread(prev => ({
+      ...prev,
+      reply_count: (prev.reply_count || 0) + 1
+    }));
   };
 
   // Loading state
@@ -244,6 +283,17 @@ const ThreadDetailPage = () => {
               </span>
             </div>
           </div>
+
+          {/* Replies Section */}
+          <ReplyList
+            replies={replies}
+            replyCount={thread.reply_count}
+            threadUsername={username}
+            threadSlug={slug}
+            isLocked={thread.is_locked}
+            loading={loadingReplies}
+            onReplySuccess={handleReplySuccess}
+          />
         </div>
       </div>
     </div>

@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const Login = () => {
   const { login, googleAuth, isLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Save location state so user can be redirected after login. Default is set to home page.
+  const from = location.state?.from || '/';
 
   const [logindata, setLogindata] = useState({
     email: '',
@@ -28,7 +32,7 @@ const Login = () => {
     const result = await login(logindata);
 
     if (result.success) {
-      navigate('/');
+      navigate(from, { replace: true });
     }
   }
 
@@ -38,7 +42,7 @@ const Login = () => {
     try {
       const result = await googleAuth(token); // using authService.googleAuth to send token to backend
       if (result.success) {
-        navigate('/');
+        navigate(from, { replace: true });
       } else {
         console.log("Google auth failed:", result.error);
       }
