@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import Breadcrumbs from '../../components/ui/Breadcrumbs';
+import BlockRenderer from '../../components/PostForm/BlogEditor/BlockRenderer';
 import postService from '../../services/postService';
+import { isEditorJsContent } from '../../utils/editorUtils';
 import { toast } from 'sonner';
 import dayjs from 'dayjs';
 import { getFlagEmoji } from '../../utils/countryUtils';
@@ -70,7 +72,7 @@ const PostPage = () => {
 
   const handleEdit = () => {
     // Navigate to edit page 
-    navigate(`/profile/${username}/posts/${slug}/edit`);
+    navigate(`/u/${username}/posts/${slug}/edit`);
   };
 
   const handleDelete = async () => {
@@ -180,7 +182,7 @@ const PostPage = () => {
           
           {/* Breadcrumbs */}
           <div className="mb-6">
-            <Breadcrumbs />
+            <Breadcrumbs post={post} />
           </div>
 
           {/* Post Container */}
@@ -231,7 +233,7 @@ const PostPage = () => {
                     </p>
                     <p className="text-sm text-[var(--text-color-ink-400)]">
                       Posted on {dayjs(post.created_at).format('MMMM D, YYYY')}
-                      {post.created_at !== post.updated_at && " (edited)"}
+                      {!dayjs(post.created_at).isSame(dayjs(post.updated_at), 'second') && " (edited)"}
                     </p>
                   </div>
                 </div>
@@ -260,9 +262,13 @@ const PostPage = () => {
             {/* Post Content Section */}
             <div className="p-8">
               <div className="prose prose-lg max-w-none">
-                <p className="text-[var(--text-color-ink)] leading-relaxed whitespace-pre-wrap text-lg">
-                  {post.content}
-                </p>
+                {isEditorJsContent(post.content) ? (
+                  <BlockRenderer content={post.content} />
+                ) : (
+                  <p className="text-[var(--text-color-ink)] leading-relaxed whitespace-pre-wrap text-lg">
+                    {post.content}
+                  </p>
+                )}
               </div>
             </div>
 

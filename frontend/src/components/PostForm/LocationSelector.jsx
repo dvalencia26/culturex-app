@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import postService from '../../services/postService';
 import SearchDropdown from '../ui/SearchDropdown';
 import SimpleDropdown from '../ui/SimpleDropdown';
+import { normalizeSlug } from '../../utils/countryUtils';
 
 /*
 LocationSelector Component manage all location state and API interactions.
@@ -107,8 +108,10 @@ const LocationSelector = ({
   }, [selectedCountry, locationScope]);
 
   // Handle city search term changes (for debounced API calls)
+  // Normalizes search to remove accents for better matching
   const handleCitySearch = (searchTerm) => {
-    setCitySearchTerm(searchTerm);
+    const normalizedSearch = normalizeSlug(searchTerm);
+    setCitySearchTerm(normalizedSearch);
   };
 
   // Don't render anything if location scope is 'none'
@@ -132,7 +135,6 @@ const LocationSelector = ({
               value={selectedCountry}
               onSelect={(value) => onCountryChange(value)}
               placeholder="Search for a country..."
-              loading={loadingCountries}
               error={!!errors?.primary_country}
               getOptionLabel={(country) => country.name}
               getOptionValue={(country) => country.code}
@@ -178,7 +180,6 @@ const LocationSelector = ({
               handleCitySearch(searchTerm);
             }}
             placeholder="Search for a city..."
-            loading={loadingCities}
             disabled={!selectedCountry}
             error={!!errors?.primary_city}
             getOptionLabel={(city) => city.name}

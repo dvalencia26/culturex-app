@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
+import { normalizeSlug } from '../../utils/countryUtils';
 
 /*
 SearchDropdown Component
 Renders and manages UI interactions
 Allows custom option label/value extraction via props.
+Supports accent-insensitive search (e.g., "sao paulo" matches "São Paulo")
 */
 
 const SearchDropdown = ({
@@ -26,14 +28,19 @@ const SearchDropdown = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [selectedLabel, setSelectedLabel] = useState('');
+  const [debounceTimeout, setDebounceTimeout] = useState(null);
   const dropdownRef = useRef(null); // Reference to the dropdown container
   const inputRef = useRef(null); // Reference to the input element
 
-  // Filter options based on search term
-  const filteredOptions = searchable && searchTerm.length > 0
-    ? options.filter(option =>
-        getOptionLabel(option).toLowerCase().includes(searchTerm.toLowerCase())
-      )
+  // Filter options based on search term with accent-insensitive matching
+  // Only filter locally if no external search handler (onSearchChange) is provided
+  // When external search is used, trust the backend results
+  const filteredOptions = searchable && searchTerm.length > 0 && !onSearchChange
+    ? options.filter(option => {
+        const normalizedLabel = normalizeSlug(getOptionLabel(option));
+        const normalizedSearch = normalizeSlug(searchTerm);
+        return normalizedLabel.includes(normalizedSearch);
+      })
     : options;
 
   // Handle option selection
@@ -50,16 +57,11 @@ const SearchDropdown = ({
     }
   };
 
-  // Handle input changes
+  // Handle input changes with debouncing for external search handler
   const handleInputChange = (e) => {
     const inputValue = e.target.value;
     setSearchTerm(inputValue);
     setIsOpen(true); // Always open when typing
-    
-    // Call external search handler if provided, this is useful for async searches
-    if (onSearchChange) {
-      onSearchChange(inputValue);
-    }
     
     // Clear selection if user clears input
     if (inputValue === '') {
@@ -67,6 +69,21 @@ const SearchDropdown = ({
       if (onSelect) {
         onSelect('', null);
       }
+    }
+    
+    // Debounce external search handler with 500ms delay
+    if (onSearchChange) {
+      // Clear existing timeout
+      if (debounceTimeout) {
+        clearTimeout(debounceTimeout);
+      }
+      
+      // Set new timeout
+      const timeout = setTimeout(() => {
+        onSearchChange(inputValue);
+      }, 500);
+      
+      setDebounceTimeout(timeout);
     }
   };
 
@@ -86,8 +103,19 @@ const SearchDropdown = ({
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []); // Empty dependencies - only set up once
+  
+  // Cleanup debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimeout) {
+        clearTimeout(debounceTimeout);
+      }
+    };
+  }, [debounceTimeout]);
 
   // Update search term when value prop changes (for controlled components)
   useEffect(() => {

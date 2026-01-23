@@ -5,7 +5,7 @@ import Breadcrumbs from '../../components/ui/Breadcrumbs';
 import postService from '../../services/postService';
 import { toast } from 'sonner';
 import PostCard from './PostCard';
-import { formatCityName } from '../../utils/countryUtils';
+import { formatCityName, decodeSlug, normalizeSlug } from '../../utils/countryUtils';
 
 /**
  * CityPage Component
@@ -39,9 +39,14 @@ const CityPage = () => {
       setLoading(true);
       
       try {
+        // Decode and normalize the citySlug to match backend storage
+        // são-paulo to sao-paulo (backend format)
+        const decodedCitySlug = decodeSlug(citySlug);
+        const normalizedSlug = normalizeSlug(decodedCitySlug);
+        
         // Use the proper city-specific API call
         const response = await postService.getPostsByCountry(countryCode.toUpperCase(), {
-          citySlug: citySlug,
+          citySlug: normalizedSlug,
           includeRelated: false, // Only city-specific posts
           limit: 50
         });

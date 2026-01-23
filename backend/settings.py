@@ -47,12 +47,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.postgres',
     'users', 
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'django_countries',
     'cities_light',
+    'storages',
 ]
 
 CITIES_LIGHT_INCLUDE_COUNTRIES = ['EC', 'MX','BR', 'US', 'TR']
@@ -108,8 +110,69 @@ CSRF_TRUSTED_ORIGINS = [
 
 CORS_ALLOW_CREDENTIALS = True
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media' # Directory to store uploaded media files
+#### BUCKET STORAGE SETTINGS ####
+AWS_STORAGE_BUCKET_NAME = env('DO_STORAGE_BUCKET_NAME')
+AWS_ACCESS_KEY_ID = env('SPACES_KEY')
+AWS_SECRET_ACCESS_KEY = env('SPACES_SECRET')
+
+#API endpoint for uploads
+AWS_S3_ENDPOINT_URL = env('DO_ENDPOINT_URL')
+AWS_S3_REGION_NAME = env('DO_SPACES_REGION')  # DigitalOcean Spaces region
+
+# CDN Hostname for serving files in the browser
+AWS_S3_CDN_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.{AWS_S3_REGION_NAME}.cdn.digitaloceanspaces.com'
+
+#AWS_DEFAULT_ACL = None
+#AWS_QUERYSTRING_AUTH = False  # Get public URLs without query params
+
+AWS_S3_OBJECT_PARAMETERS = {
+    'CacheControl': 'max-age=86400',
+}
+
+STATIC_URL = f"https://{AWS_S3_CDN_DOMAIN}/static/"
+MEDIA_URL  = f"https://{AWS_S3_CDN_DOMAIN}/media/"
+
+STATIC_ROOT = BASE_DIR / 'staticfiles'  # Directory to collect static files
+
+
+# Django 4.2+ static and media files settings with DigitalOcean Spaces
+### Media files settings (custom storage backends)
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "access_key": AWS_ACCESS_KEY_ID,
+            "secret_key": AWS_SECRET_ACCESS_KEY,
+            "bucket_name": AWS_STORAGE_BUCKET_NAME,
+            "region_name": AWS_S3_REGION_NAME,
+            "endpoint_url": AWS_S3_ENDPOINT_URL,
+            "location": "media",
+            "default_acl": "public-read",
+            "querystring_auth": False,
+            "custom_domain": AWS_S3_CDN_DOMAIN,
+            "file_overwrite": False,
+        },
+    },
+    "staticfiles": {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "access_key": AWS_ACCESS_KEY_ID,
+            "secret_key": AWS_SECRET_ACCESS_KEY,
+            "bucket_name": AWS_STORAGE_BUCKET_NAME,
+            "region_name": AWS_S3_REGION_NAME,
+            "endpoint_url": AWS_S3_ENDPOINT_URL,
+            "location": "static",
+            "default_acl": "public-read",
+            "querystring_auth": False,
+            "custom_domain": AWS_S3_CDN_DOMAIN,
+            "file_overwrite": True,
+        },
+    },
+}
+
+#MEDIA_URL = '/media/'
+#MEDIA_ROOT = BASE_DIR / 'media' # Directory to store uploaded media files
+
 
 # CSRF settings for API
 CSRF_COOKIE_NAME = 'csrftoken'
@@ -197,7 +260,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+#STATIC_URL = 'static/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

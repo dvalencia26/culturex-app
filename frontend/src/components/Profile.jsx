@@ -2,11 +2,17 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext';
 import { useParams, useNavigate } from 'react-router-dom';
 import { userService } from '../services/userService';
+import postService from '../services/postService';
+import { threadService } from '../services/threadService';
 import Loader from './Loader';
+import ProfilePostCard from './ui/ProfilePostCard';
+import ThreadProfileCard from './ui/ThreadProfileCard';
+import { BadgeCheck } from 'lucide-react';
 
 const Profile = () => {
   const { user, logout } = useAuth();
   const { handle } = useParams(); // Get handle from URL using react-router
+  const navigate = useNavigate(); 
   
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -17,6 +23,13 @@ const Profile = () => {
   const [following, setFollowing] = useState(false);
   const [followerCount, setFollowerCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
+
+  // Posts and Threads
+  const [posts, setPosts] = useState([]);
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [threads, setThreads] = useState([]);
+  const [threadsLoading, setThreadsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('posts'); // 'posts', 'threads', 'drafts'
 
   // Determine if this profile belongs to the logged-in user 
   const profileIdentifier = handle;
@@ -52,6 +65,79 @@ const Profile = () => {
     fetchProfile();
   }, [profileIdentifier]); // Re-fetch when profileIdentifier changes
 
+  // Fetch user posts
+  useEffect(() => {
+    const fetchPosts = async () => {
+      if (!profile?.username) return;
+      
+      setPostsLoading(true);
+      try {
+        // Use getMyPosts for own profile (includes published posts only for posts tab)
+        // Use getUserPosts for other users' profiles
+        const result = isOurProfile 
+          ? await postService.getMyPosts('published')
+          : await postService.getUserPosts(profile.username);
+        
+        if (result.success && result.data) {
+          // Handle both response formats
+          const postsData = result.data.posts || result.data;
+          setPosts(Array.isArray(postsData) ? postsData : []);
+        }
+      } catch (err) {
+        console.error('Error fetching posts:', err);
+      } finally {
+        setPostsLoading(false);
+      }
+    };
+
+    const fetchDrafts = async () => {
+      if (!profile?.username || !isOurProfile) return;
+      
+      setPostsLoading(true);
+      try {
+        const result = await postService.getMyPosts('draft');
+        if (result.success && result.data) {
+          const postsData = result.data.posts || result.data;
+          setPosts(Array.isArray(postsData) ? postsData : []);
+        }
+      } catch (err) {
+        console.error('Error fetching drafts:', err);
+      } finally {
+        setPostsLoading(false);
+      }
+    };
+
+    const fetchThreads = async () => {
+      if (!profile?.username) return;
+      
+      setThreadsLoading(true);
+      try {
+        // Use getMyThreads for own profile, getUserThreads for others
+        const result = isOurProfile
+          ? await threadService.getMyThreads()
+          : await threadService.getUserThreads(profile.username);
+        
+        if (result.success && result.data) {
+          // Handle both response formats
+          const threadsData = result.data.threads || result.data;
+          setThreads(Array.isArray(threadsData) ? threadsData : []);
+        }
+      } catch (err) {
+        console.error('Error fetching threads:', err);
+      } finally {
+        setThreadsLoading(false);
+      }
+    };
+
+    if (activeTab === 'posts') {
+      fetchPosts();
+    } else if (activeTab === 'drafts') {
+      fetchDrafts();
+    } else if (activeTab === 'threads') {
+      fetchThreads();
+    }
+  }, [profile?.username, activeTab, isOurProfile]);
+
   // Handle follow/unfollow action
   const handleToggleFollow = async () => {
     if (!handle || isOurProfile) return;
@@ -80,148 +166,287 @@ const Profile = () => {
     return <Loader message="Loading profile..." subtitle="Please wait while we fetch the profile data" />;
   }
 
+  {/* Show error message if profile failed to load */}
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--color-background-snow)]">
+        <div className="bg-white rounded-card shadow-card p-8 max-w-md">
+          <p className="text-red-600 text-center">{error}</p>
+          <button
+            onClick={() => navigate(-1)}
+            className="mt-4 w-full py-2 px-4 bg-[var(--primary-color-royal)] text-white rounded-input hover:bg-[var(--primary-color-royal-600)] transition-colors"
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-paper p-4">
-      <div className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl p-8 border-4 border-sky">
-        <h1 className="text-sky text-center mb-8 tracking-wide text-3xl font-extrabold drop-shadow-lg">Profile</h1>
-
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-            {error}
-          </div>
-        )}
-
-        {profile && (
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* User Information */}
-            <div className="bg-lagoon/10 p-6 rounded-lg">
-              <h2 className="text-lagoon font-semibold text-xl mb-4">User Information</h2>
-              <div className="space-y-2">
-                <p className="text-ink"><strong>Email:</strong> {profile.email}</p>
-                <p className="text-ink"><strong>Full Name:</strong> {profile.full_name}</p>
-                <p className="text-ink"><strong>Username:</strong> @{profile.username}</p>
-                <p className="text-ink"><strong>Verified:</strong> {profile.is_verified ? 'Yes' : 'No'}</p>
-              </div>
-            </div>
-
-            {/* Profile Picture */}
-            <div className="bg-sky/10 p-6 rounded-lg">
-              <h2 className="text-sky font-semibold text-xl mb-4">Profile Picture</h2>
+    <div className="min-h-screen bg-[var(--color-background-snow)]">
+      <div className="relative">
+        {/* Gradient Header*/}
+        <div 
+          className="h-48 bg-gradient-to-br from-[var(--primary-color-royal-600)] via-[var(--primary-color-royal-600)] to-[var(--secondary-color-orchid)]"
+        />
+        
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Profile Avatar */}
+          <div className="relative -mt-20 flex justify-center">
+            <div className="relative">
               {profile?.profile_image ? (
-                <img 
-                  src={profile.profile_image} 
-                  alt="Profile" 
-                  className="w-32 h-32 rounded-full object-cover mx-auto border-4 border-sky"
+                <img
+                  src={profile.profile_image}
+                  alt={profile.full_name}
+                  className="w-40 h-40 rounded-full object-cover border-4 border-white shadow-lg"
                 />
               ) : (
-                <div className="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center mx-auto border-4 border-sky">
-                  <span className="text-gray-500 text-sm">No Image</span>
+                <div className="w-40 h-40 rounded-full bg-gradient-to-br from-[var(--primary-color-royal)] to-[var(--secondary-color-orchid)] border-4 border-white shadow-lg flex items-center justify-center">
+                  <span className="text-white text-5xl font-bold">
+                    {profile?.full_name?.charAt(0) || 'U'}
+                  </span>
+                </div>
+              )}
+              {profile?.is_verified && (
+                <div className="absolute bottom-2 right-2 bg-[var(--color-gold)] rounded-full p-1.5 border-2 border-white">
+                  <BadgeCheck className="w-5 h-5 text-white" strokeWidth={2.5} />
                 </div>
               )}
             </div>
+          </div>
 
-            {/* Bio */}
-            <div className="bg-sunrise/10 p-6 rounded-lg md:col-span-2">
-              <h2 className="text-ink font-semibold text-xl mb-4">Bio</h2>
-              <p className="text-ink">
-                {profile?.bio || 'No bio available. Tell us about yourself!'}
+          {/* Profile Information (Name, Username, Bio) */}
+          <div className="text-center mt-6 pb-8 border-b border-[var(--border-color-line)]">
+            <h1 className="text-[var(--text-color-ink)] font-bold text-3xl mb-2 font-ui">
+              {profile?.full_name}
+            </h1>
+
+            <div className="flex items-center justify-center gap-1.5 mb-4">
+              <span className="text-[var(--text-color-ink-400)] text-lg">
+                @{profile?.username}
+              </span>
+            </div>
+
+            {profile?.bio && (
+              <p className="text-[var(--text-color-ink)] text-base max-w-2xl mx-auto mb-6 leading-relaxed">
+                {profile.bio}
               </p>
+            )}
+
+            {/* Social Media Links (Ig, X, Facebook) */}
+            <div className="flex items-center justify-center gap-4 mb-6">
+              {profile?.instagram_url && (
+                <a
+                  href={profile.instagram_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 flex items-center justify-center hover:scale-110 transition-transform"
+                  aria-label="Instagram"
+                >
+                  <svg className="w-5 h-5" fill="white">
+                    <use href="/sprite.svg#instagram" />
+                  </svg>
+                </a>
+              )}
+              
+              {profile?.twitter_url && (
+                <a
+                  href={profile.twitter_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 rounded-full bg-[var(--text-color-ink)] flex items-center justify-center hover:scale-110 transition-transform"
+                  aria-label="X (Twitter)"
+                >
+                  <svg className="w-4 h-4" fill="white">
+                    <use href="/sprite.svg#x" />
+                  </svg>
+                </a>
+              )}
+
+              {profile?.facebook_url && (
+                <a
+                  href={profile.facebook_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 rounded-full bg-[#1877F2] flex items-center justify-center hover:scale-110 transition-transform"
+                  aria-label="Facebook"
+                >
+                  <svg className="w-4 h-4" fill="white">
+                    <use href="/sprite.svg#facebook" />
+                  </svg>
+                </a>
+              )}
             </div>
 
-            {/* Social Media Links */}
-            <div className="bg-lagoon/10 p-6 rounded-lg">
-              <h2 className="text-lagoon font-semibold text-xl mb-4">Social Media</h2>
-              <div className="space-y-3">
-                {profile?.facebook_url && (
-                  <a href={profile.facebook_url} target="_blank" rel="noopener noreferrer" 
-                     className="flex items-center text-blue-600 hover:text-blue-800 transition-colors">
-                    <span className="mr-2">📘</span> Facebook
-                  </a>
-                )}
-                {profile?.instagram_url && (
-                  <a href={profile.instagram_url} target="_blank" rel="noopener noreferrer" 
-                     className="flex items-center text-pink-600 hover:text-pink-800 transition-colors">
-                    <span className="mr-2">📷</span> Instagram
-                  </a>
-                )}
-                {profile?.twitter_url && (
-                  <a href={profile.twitter_url} target="_blank" rel="noopener noreferrer" 
-                     className="flex items-center text-blue-400 hover:text-blue-600 transition-colors">
-                    <span className="mr-2">🐦</span> X (Twitter)
-                  </a>
-                )}
-                {profile?.tiktok_url && (
-                  <a href={profile.tiktok_url} target="_blank" rel="noopener noreferrer" 
-                     className="flex items-center text-black hover:text-gray-700 transition-colors">
-                    <span className="mr-2">🎵</span> TikTok
-                  </a>
-                )}
-                {!profile?.facebook_url && !profile?.instagram_url && !profile?.twitter_url && !profile?.tiktok_url && (
-                  <p className="text-gray-500 italic">No social media links added</p>
-                )}
+            {/* Stats (Followers, Following) */}
+            <div className="flex items-center justify-center gap-8 mb-6">
+              <div className="text-center">
+                <div className="text-[var(--text-color-ink)] font-bold text-2xl font-ui">
+                  {followerCount}
+                </div>
+                <div className="text-[var(--text-color-ink-400)] text-sm">
+                  Followers
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-[var(--text-color-ink)] font-bold text-2xl font-ui">
+                  {followingCount}
+                </div>
+                <div className="text-[var(--text-color-ink-400)] text-sm">
+                  Following
+                </div>
               </div>
             </div>
 
-            {/* Followers & Following */}
-            <div className="bg-sky/10 p-6 rounded-lg">
-              <h2 className="text-sky font-semibold text-xl mb-4">Social Stats</h2>
-              <div className="flex justify-around text-center">
-                <div>
-                  <div className="text-2xl font-bold text-ink">{followerCount}</div>
-                  <div className="text-sm text-gray-600">Followers</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-ink">{followingCount}</div>
-                  <div className="text-sm text-gray-600">Following</div>
-                </div>
-              </div>
+            {/* Action Buttons (Edit Profile, Follow/Following) */}
+            <div className="flex items-center justify-center gap-3">
+              {isOurProfile ? (
+                <button
+                  onClick={() => navigate('/settings/profile')}
+                  className="px-6 py-2 bg-[var(--color-background-snow)] text-[var(--text-color-ink)] font-semibold rounded-input border border-[var(--border-color-line)] hover:bg-[var(--border-color-line)] transition-colors"
+                >
+                  Edit Profile
+                </button>
+              ) : (
+                <button
+                  onClick={handleToggleFollow}
+                  className={`px-6 py-2 font-semibold rounded-input transition-colors ${
+                    following
+                      ? 'bg-[var(--color-background-snow)] text-[var(--text-color-ink)] border border-[var(--border-color-line)] hover:bg-[var(--border-color-line)]'
+                      : 'bg-[var(--primary-color-royal)] text-white hover:bg-[var(--primary-color-royal-600)]'
+                  }`}
+                >
+                  {following ? 'Following' : 'Follow'}
+                </button>
+              )}
             </div>
           </div>
-        )}
 
-        <div className="mt-8 text-center">
-          {/* Show different buttons based on whose profile this is */}
-          {isOurProfile ? (
-            // This is my profile - show Edit Profile and Logout buttons
-            <div className="space-y-3">
+          {/* Tabs (Posts, Threads, Drafts) */}
+          <div className="flex items-center justify-center gap-12 py-4 border-b border-[var(--border-color-line)]">
+            <button
+              onClick={() => setActiveTab('posts')}
+              className={`relative pb-4 font-semibold transition-colors ${
+                activeTab === 'posts'
+                  ? 'text-[var(--text-color-ink)]'
+                  : 'text-[var(--text-color-ink-400)] hover:text-[var(--text-color-ink)]'
+              }`}
+            >
+              Posts
+              {activeTab === 'posts' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--primary-color-royal)]" />
+              )}
+            </button>
+            
+            <button
+              onClick={() => setActiveTab('threads')}
+              className={`relative pb-4 font-semibold transition-colors ${
+                activeTab === 'threads'
+                  ? 'text-[var(--text-color-ink)]'
+                  : 'text-[var(--text-color-ink-400)] hover:text-[var(--text-color-ink)]'
+              }`}
+            >
+              Threads
+              {activeTab === 'threads' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--primary-color-royal)]" />
+              )}
+            </button>
+
+            {/* Drafts tab - only show for user own profile */}
+            {isOurProfile && (
               <button
-                onClick={() => console.log('Edit profile clicked')}
-                className="w-full py-3 bg-sky text-ink font-extrabold text-lg rounded-lg shadow-lg hover:bg-opacity-90 transition-colors duration-200"
-              >
-                Edit Profile
-              </button>
-              <button
-                onClick={logout}
-                className="w-full py-3 bg-sunrise text-ink font-extrabold text-lg rounded-lg shadow-lg hover:bg-opacity-90 transition-colors duration-200"
-              >
-                Logout
-              </button>
-            </div>
-          ) : (
-            // This is another User's profile - show Follow/Unfollow button
-            <div className="space-y-3">
-              <button
-                onClick={handleToggleFollow}
-                className={`w-full py-3 font-extrabold text-lg rounded-lg shadow-lg transition-colors duration-200 ${
-                  following 
-                    ? 'bg-gray-400 text-white hover:bg-gray-500' 
-                    : 'bg-green-500 text-white hover:bg-green-600'
+                onClick={() => setActiveTab('drafts')}
+                className={`relative pb-4 font-semibold transition-colors ${
+                  activeTab === 'drafts'
+                    ? 'text-[var(--text-color-ink)]'
+                    : 'text-[var(--text-color-ink-400)] hover:text-[var(--text-color-ink)]'
                 }`}
               >
-                {following ? `Unfollow @${profile?.username}` : `Follow @${profile?.username}`}
+                Drafts
+                {activeTab === 'drafts' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--primary-color-royal)]" />
+                )}
               </button>
-              <button
-                onClick={() => window.history.back()}
-                className="w-full py-3 bg-gray-300 text-ink font-semibold text-lg rounded-lg shadow-lg hover:bg-gray-400 transition-colors duration-200"
-              >
-                Back
-              </button>
-            </div>
-          )}
+            )}
+          </div>
+
+          {/* Content Area */}
+          <div className="py-8">
+            {activeTab === 'posts' && (
+              <>
+                {postsLoading ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--primary-color-royal)]" />
+                  </div>
+                ) : posts.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {posts.map((post) => (
+                      <ProfilePostCard key={post.id} post={post} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <p className="text-[var(--text-color-ink-400)] text-lg">
+                      No posts yet
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {activeTab === 'threads' && (
+              <>
+                {threadsLoading ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--primary-color-royal)]" />
+                  </div>
+                ) : threads.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {threads.map((thread) => (
+                      <ThreadProfileCard key={thread.id} thread={thread} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <p className="text-[var(--text-color-ink-400)] text-lg">
+                      No threads yet
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {activeTab === 'drafts' && (
+              <>
+                {postsLoading ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--primary-color-royal)]" />
+                  </div>
+                ) : posts.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {posts.map((post) => (
+                      <ProfilePostCard key={post.id} post={post} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <p className="text-[var(--text-color-ink-400)] text-lg mb-2">
+                      No drafts yet
+                    </p>
+                    <p className="text-[var(--text-color-ink-400)] text-sm">
+                      Saved drafts will appear here to make editing easier
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
+
 
 export default Profile

@@ -18,8 +18,9 @@ const CreatePostPage = () => {
   }, [user, navigate]);
 
   const handlePostSuccess = (post) => {
-    toast.success('Post created successfully!'); // Navigate to the new post or back to home
-    navigate('/');
+    toast.success('Post created successfully!');
+    // Navigate to the newly created post
+    navigate(`/u/${post.author_username}/posts/${post.slug}`);
   };
 
   if (!user) return null;

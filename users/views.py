@@ -17,9 +17,22 @@ from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from django.middleware.csrf import get_token # To get the CSRF token
 from django.conf import settings
 from django.db import models
+from django.db.models import CharField
+from django.db.models.functions import Lower
 from cities_light.models import Country, City
 from django_countries import countries as django_countries
 from django.db.models import Count
+from botocore.config import Config
+import uuid # For generating unique identifiers
+import boto3
+import json
+
+# Custom database function for unaccent when filtering city names
+class Unaccent(models.Func):
+    """PostgreSQL unaccent function"""
+    function = 'unaccent'
+    template = "%(function)s(%(expressions)s)"
+    output_field = CharField()
 
 class RegisterUserView(GenericAPIView):
     serializer_class = UserRegisterSerializer
@@ -617,6 +630,78 @@ def get_countries_with_posts(request):
 
 
 @api_view(['GET'])
+def get_country_previews(request):
+    """
+    Get countries with preview posts (latest 4 posts with images per country).
+    Used for the home page country grid display.
+    """
+    limit = int(request.GET.get('limit', 4))  # Number of posts per country
+    
+    try:
+        # Get unique countries from published posts
+        countries_with_posts = Post.objects.filter(
+            status=Post.Status.PUBLISHED,
+            primary_country__isnull=False
+        ).values_list('primary_country', flat=True).distinct()
+        
+        result = [] # List to hold country previews
+        
+        for country_code in countries_with_posts:
+            try:
+                country_name = dict(django_countries)[country_code]
+            except KeyError:
+                continue
+            
+            # Get latest posts for this country with related data
+            posts = Post.objects.select_related(
+                'user__profile', 'primary_city'
+            ).filter(
+                status=Post.Status.PUBLISHED,
+                primary_country=country_code
+            ).order_by('-created_at')[:limit * 2]  # Fetch extra to account for posts without images
+            
+            # Serialize posts and filter for those with images
+            serializer = PostSerializer(posts, many=True, context={'request': request})
+            preview_posts = []
+            
+            for post_data in serializer.data:
+                # Stop if we reached the limit
+                if len(preview_posts) >= limit:
+                    break
+                
+                # Only include posts with thumbnails
+                if post_data.get('thumbnailUrl'):
+                    preview_posts.append({
+                        'id': post_data['id'],
+                        'slug': post_data['slug'],
+                        'title': post_data['title'],
+                        'author_username': post_data['author_username'],
+                        'thumbnailUrl': post_data['thumbnailUrl'],
+                        'created_at': post_data['created_at']
+                    })
+            
+            # Only include countries that have at least one post with an image
+            if preview_posts:
+                result.append({
+                    'countryCode': country_code,
+                    'countryName': country_name,
+                    'previewPosts': preview_posts
+                })
+        
+        # Sort by country name
+        result.sort(key=lambda x: x['countryName'])
+        
+        return Response({
+            'countries': result,
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'error': f'Error fetching country previews: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
 def get_cities_with_posts_by_country(request, country_code):
     """Get cities that have posts in a specific country"""
     try:
@@ -653,7 +738,7 @@ def get_cities_with_posts_by_country(request, country_code):
 
 @api_view(['GET'])
 def get_cities_by_country(request, country_code):
-    """City filtering with search and pagination"""
+    """City filtering with accent-insensitive search and pagination"""
     
     try:
         # Get search query
@@ -665,14 +750,18 @@ def get_cities_by_country(request, country_code):
             country__code2=country_code
         ).select_related('region', 'country')
         
-        # Apply search filter with priority ordering
+        # Apply search filter with accent-insensitive matching and priority ordering
         if search:
-            cities = cities.filter(
-                name__icontains=search
+            # Use custom Unaccent function for accent-insensitive search
+            # This allows "brasilia" to match "Brasília"
+            cities = cities.annotate(
+                unaccented_name=Unaccent(Lower('name'))
+            ).filter(
+                unaccented_name__icontains=search.lower()
             ).order_by(
-                # Prioritize cities that start with the search term
+                # Prioritize cities that start with the search term (accent-insensitive)
                 models.Case(
-                    models.When(name__istartswith=search, then=models.Value(0)),
+                    models.When(unaccented_name__istartswith=search.lower(), then=models.Value(0)),
                     default=models.Value(1),
                     output_field=models.IntegerField()
                 ),
@@ -1104,3 +1193,99 @@ def get_all_countries(request):
     except Exception as e:
         return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def presign_image_upload(request):
+    """
+    Generate presigned POST data for direct upload to DigitalOcean Spaces.
+    Returns presigned data for both original and thumbnail.
+    """
+    content_type = request.data.get('content_type', 'image/jpeg')
+    
+    # Validate content type
+    allowed_types = ['image/jpeg','image/jpg', 'image/png', 'image/webp']
+    if content_type not in allowed_types:
+        return Response(
+            {'error': f'Invalid content type. Allowed: {", ".join(allowed_types)}'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Get file extension from content type
+    ext_map = {'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/webp': 'webp'}
+    ext = ext_map.get(content_type, 'jpg')
+    
+    # Generate unique keys for original and thumbnail
+    file_uuid = uuid.uuid4()
+    user_id = request.user.id
+    original_key = f"posts/{user_id}/{file_uuid}.{ext}"
+    thumb_key = f"posts/{user_id}/{file_uuid}_thumb.{ext}"
+    
+    try:
+        # Create a new connection to DigitalOcean Spaces using boto3
+        s3_client = boto3.client(
+            's3',
+            region_name=settings.AWS_S3_REGION_NAME,
+            endpoint_url=settings.AWS_S3_ENDPOINT_URL,
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        )
+        
+        # Define the bucket name from my existing bucket (from settings)
+        bucket_name = settings.AWS_STORAGE_BUCKET_NAME
+        
+        # Generate presigned POST for original (max 10MB)
+        original_presigned = s3_client.generate_presigned_post(
+            Bucket=bucket_name,
+            Key=original_key,
+            Fields={
+                'Content-Type': content_type,
+                'acl': 'public-read',
+            },
+            Conditions=[
+                {'Content-Type': content_type},
+                {'acl': 'public-read'},
+                ['content-length-range', 1, 10 * 1024 * 1024],  # 1 byte to 10MB
+            ],
+            ExpiresIn=120  # 2 minutes
+        )
+        
+        # Generate presigned POST for thumbnail (max 1MB)
+        # Signed URL will be used to upload the thumbnail after resizing on client side
+        thumb_presigned = s3_client.generate_presigned_post(
+            Bucket=bucket_name,
+            Key=thumb_key,
+            Fields={
+                'Content-Type': content_type,
+                'acl': 'public-read',
+            },
+            Conditions=[
+                {'Content-Type': content_type},
+                {'acl': 'public-read'},
+                ['content-length-range', 1, 1 * 1024 * 1024],  # 1 byte to 1MB
+            ],
+            ExpiresIn=120
+        )
+        
+        # Construct final URLs (using CDN domain)
+        cdn_base = f"https://{settings.AWS_S3_CDN_DOMAIN}"
+        
+        return Response({
+            'original': {
+                'key': original_key,
+                'upload': original_presigned,
+                'url': f"{cdn_base}/{original_key}"
+            },
+            'thumb': {
+                'key': thumb_key,
+                'upload': thumb_presigned,
+                'url': f"{cdn_base}/{thumb_key}"
+            }
+        })
+        
+    except Exception as e:
+        print(f"Presign error: {e}")
+        return Response(
+            {'error': 'Failed to generate upload URLs'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

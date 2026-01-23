@@ -52,6 +52,12 @@ const Navbar = () => {
             >
               Home
             </Link>
+            <Link 
+              to="/threads" 
+              className="text-[var(--text-color-ink)] hover:text-[var(--primary-color-royal)] px-3 py-2 text-sm font-medium transition-all duration-200 ease-[var(--ease-snappy)]"
+            >
+              Discussion
+            </Link>
             
             {user ? (
               <div className="flex items-center space-x-4">
@@ -82,7 +88,7 @@ const Navbar = () => {
                         className="flex items-center gap-2 px-4 py-2 text-sm text-[var(--text-color-ink)] hover:bg-[var(--color-background-snow)] hover:text-[var(--primary-color-royal)] transition-colors"
                       >
                         <MessageSquare className="w-4 h-4" />
-                        New Thread
+                        New Discussion
                       </Link>
                     </div>
                   )}
@@ -149,6 +155,13 @@ const Navbar = () => {
               >
                 Home
               </Link>
+              <Link
+                to="/threads"
+                className="block px-3 py-2 text-[var(--text-color-ink)] hover:text-[var(--primary-color-royal)] text-base font-medium transition-all duration-200 ease-[var(--ease-snappy)]"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Discussion
+              </Link>
               
               {user ? (
                 <>
@@ -168,7 +181,7 @@ const Navbar = () => {
                       className="block px-3 py-2 text-[var(--text-color-ink)] hover:text-[var(--primary-color-royal)] text-base font-medium transition-all duration-200 ease-[var(--ease-snappy)]"
                       onClick={() => setIsMenuOpen(false)}
                     >
-                      New Thread
+                      New Discussion
                     </Link>
                   </div>
                   

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import CountryButton from '../components/ui/CountryButton';
+import CountryPreviewCard from '../components/ui/CountryPreviewCard';
+//import CountryButton from '../components/ui/CountryButton';
 import postService from '../services/postService';
 import { toast } from 'sonner';
 import banner from '../assets/banner.webp';
@@ -9,25 +10,25 @@ import banner from '../assets/banner.webp';
 const Home = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [countries, setCountries] = useState([]);
+  const [countryPreviews, setCountryPreviews] = useState([]);
   const [loadingCountries, setLoadingCountries] = useState(false);
 
-  // Load countries with posts
+  // Load countries with preview posts
   useEffect(() => {
-    const loadCountries = async () => {
+    const loadCountryPreviews = async () => {
       setLoadingCountries(true);
       try {
-        const response = await postService.getCountriesWithPosts();
-        setCountries(response.countries || []);
+        const response = await postService.getCountryPreviews(4);
+        setCountryPreviews(response.countries || []);
       } catch (error) {
-        console.error('Error loading countries:', error);
+        console.error('Error loading country previews:', error);
         toast.error('Failed to load countries');
       } finally {
         setLoadingCountries(false);
       }
     };
 
-    loadCountries();
+    loadCountryPreviews();
   }, []);
 
   return (
@@ -74,21 +75,25 @@ const Home = () => {
         {/* Countries with Posts Section */}
         <div className="mt-16 max-w-6xl mx-auto">
           
-          {/* Global Posts Button */}
-          <div className="text-center mb-8">
+          {/* Section Header */}
+          <div className="text-left mb-8">
+            <h2 className="text-2xl md:text-3xl font-bold text-[var(--primary-color-royal)] font-editorial mb-2">
+              Trending Destinations
+            </h2>
           </div>
           
           {loadingCountries ? (
             <div className="flex justify-center items-center py-12">
               <div className="w-8 h-8 border-4 border-[var(--primary-color-royal)] border-t-transparent rounded-full animate-spin"></div>
             </div>
-          ) : countries.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {countries.map((country) => (
-                <CountryButton
-                  key={country.code}
-                  countryCode={country.code}
-                  countryName={country.name}
+          ) : countryPreviews.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {countryPreviews.map((country) => (
+                <CountryPreviewCard
+                  key={country.countryCode}
+                  countryCode={country.countryCode}
+                  countryName={country.countryName}
+                  previewPosts={country.previewPosts}
                 />
               ))}
             </div>

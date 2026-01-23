@@ -3,6 +3,31 @@
 const flagEmojiCache = new Map();
 
 /**
+ * Decode URL-encoded string safely
+ */
+export const decodeSlug = (str) => {
+  if (!str) return '';
+  try {
+    return decodeURIComponent(str);
+  } catch (e) {
+    console.warn('Failed to decode slug:', str);
+    return str;
+  }
+};
+
+/**
+ * Normalize string by removing special characters (accents, diacritics)
+ * Used to match backend slug storage format
+ */
+export const normalizeSlug = (str) => {
+  if (!str) return '';
+  return str
+    .normalize('NFD') // Decompose accented characters
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+    .toLowerCase();
+};
+
+/**
  * Get flag emoji for a given country code
  * 
  * @example
@@ -40,6 +65,7 @@ export const getFlagEmoji = (countryCode) => {
 /**
  * Format city slug to display name
  * Converts 'sao-paulo' to 'Sao Paulo'
+ * Handles URL-encoded characters like 'bras%C3%ADlia' to 'Brasília'
  * 
  * @param {string} slug - City slug (e.g., 'sao-paulo', 'new-york')
  * @returns {string} Formatted city name
@@ -47,7 +73,10 @@ export const getFlagEmoji = (countryCode) => {
 export const formatCityName = (slug) => {
   if (!slug) return '';
   
-  return slug
+  // Decode URL encoding first
+  const decoded = decodeSlug(slug);
+  
+  return decoded
     .split('-')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');

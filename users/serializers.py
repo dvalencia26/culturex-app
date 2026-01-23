@@ -11,6 +11,7 @@ from .utils import send_normal_email, get_full_image_url
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from django.conf import settings
 
+
 class UserRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(max_length=128, min_length=8, write_only=True)
     password2 = serializers.CharField(max_length=128, min_length=8, write_only=True)
@@ -250,6 +251,23 @@ class PostSerializer(serializers.ModelSerializer):
     city_name = serializers.CharField(source='primary_city.name', read_only=True)
 
     absolute_url = serializers.CharField(source='get_absolute_url', read_only=True)
+    thumbnailUrl = serializers.SerializerMethodField()
+
+    def get_thumbnailUrl(self, obj):
+        """Extract first image URL from EditorJS content blocks"""
+        try:
+            if obj.content:
+                import json
+                content_data = json.loads(obj.content) if isinstance(obj.content, str) else obj.content
+                if content_data and 'blocks' in content_data:
+                    for block in content_data['blocks']:
+                        if block.get('type') == 'image':
+                            thumbnail_url = block.get('data', {}).get('file', {}).get('url')
+                            if thumbnail_url:
+                                return thumbnail_url
+        except (json.JSONDecodeError, TypeError, KeyError, AttributeError):
+            pass
+        return None
 
     def get_author_username(self, obj):
         """Get author username, with fallback if profile doesn't exist"""
@@ -297,7 +315,7 @@ class PostSerializer(serializers.ModelSerializer):
                 # Fields the user can input (writable)
                 'title', 'content', 'location_scope', 'primary_country', 'primary_city', 'status',
                 # Read-only fields (auto-generated)
-                'id', 'slug', 'created_at', 'updated_at', 'absolute_url',
+                'id', 'slug', 'created_at', 'updated_at', 'absolute_url', 'thumbnailUrl',
                 # Author info (read-only)
                 'author_username', 'author_full_name', 'author_profile_image',
                 # Location display names (read-only)
@@ -305,7 +323,7 @@ class PostSerializer(serializers.ModelSerializer):
             ]
             # These fields are read-only and cannot be modified by the user
             read_only_fields = [
-                'id', 'slug', 'created_at', 'updated_at', 'absolute_url',
+                'id', 'slug', 'created_at', 'updated_at', 'absolute_url', 'thumbnailUrl',
                 'author_username', 'author_full_name', 'author_profile_image',
                 'country_name', 'country_code', 'country_flag', 'city_name'
             ]

@@ -240,6 +240,16 @@ export const postService = {
     }
   },
 
+  // Get countries with preview posts (for home page with thumbnails)
+  getCountryPreviews: async (limit = 4) => {
+    try {
+      const response = await axiosInstance.get(`/auth/country-previews/?limit=${limit}`);
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.error || 'Failed to fetch country previews');
+    }
+  },
+
   // Get cities with posts for a specific country
   getCitiesWithPostsByCountry: async (countryCode) => {
     try {

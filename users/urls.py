@@ -4,9 +4,9 @@ from django.conf.urls.static import static
 from .views import (
     RegisterUserView, VerifyUserEmail, LoginUserView, PasswordResetConfirm, 
     PasswordResetRequestView, SetNewPassword, LogoutUserView, VerifyUserView, 
-    CSRFTokenView, CookieTokenRefreshView, get_user_profile_data, toggleFollow, 
+    CSRFTokenView, CookieTokenRefreshView, get_user_profile_data, presign_image_upload, toggleFollow, 
     post_list_create, get_user_posts, post_detail, get_my_posts, get_countries_for_posts, 
-    get_countries_with_posts, get_cities_by_country, get_cities_with_posts_by_country,
+    get_countries_with_posts, get_country_previews, get_cities_by_country, get_cities_with_posts_by_country,
     # Thread views
     thread_category_list, thread_category_detail, thread_subcategory_list,
     thread_list_create, get_user_threads, thread_detail, get_my_threads,
@@ -45,10 +45,14 @@ urlpatterns = [
     path('profile/<str:username>/posts/', get_user_posts, name='user-posts'),  # GET: User's published posts
     path('profile/<str:username>/posts/<slug:slug>/', post_detail, name='post-detail'),  # GET/PUT/PATCH/DELETE: Specific post
 
+    # Media Files
+    path('presign-upload/', presign_image_upload, name='presign-upload'),  # POST: Get presigned URL for image upload
+
     # Location Data
     path('countries/', get_all_countries, name='all-countries'),  # GET: All countries
     path('countries-for-posts/', get_countries_for_posts, name='countries-for-posts'),  # GET: Countries based on location scope
     path('countries-with-posts/', get_countries_with_posts, name='countries-with-posts'),  # GET: Countries that have posts
+    path('country-previews/', get_country_previews, name='country-previews'),  # GET: Countries with thumbnail posts for home page
     path('countries/<str:country_code>/cities/', get_cities_by_country, name='cities-by-country'),  # GET: Cities for country
     path('countries/<str:country_code>/cities-with-posts/', get_cities_with_posts_by_country, name='cities-with-posts'),  # GET: Cities with posts
 

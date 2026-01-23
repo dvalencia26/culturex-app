@@ -9,9 +9,10 @@ import PageNotFound from './pages/PageNotFound'
 import Breadcrumbs from './components/ui/Breadcrumbs'
 import CountryPage from './pages/PostPages/CountryPage'
 import CityPage from './pages/PostPages/CityPage'
-//import GlobalPage from './pages/PostPages/GlobalPage'
+import GlobalPage from './pages/PostPages/GlobalPage'
 import PostPage from './pages/PostPages/PostPage'
 import EditPostPage from './pages/PostPages/EditPostPage'
+import Countries from './pages/Countries'
 import CountryThreadPage from './pages/ThreadPages/CountryThreadPage'
 import ThreadDetailPage from './pages/ThreadPages/ThreadDetailPage'
 import EditThreadPage from './pages/ThreadPages/EditThreadPage'
@@ -49,9 +50,10 @@ function App() {
             </ProtectedRoute>
           } />
           {/* Post Pages with Location Navigation */}
+          <Route path="/countries" element={<Countries />} />
           <Route path="/countries/:countryCode" element={<CountryPage />} />
           <Route path="/countries/:countryCode/:citySlug" element={<CityPage />} />
-          {/* <Route path="/global-posts" element={<GlobalPage />} /> */}
+          <Route path="/global-posts" element={<GlobalPage />} />
           
           {/* Thread Pages */}
           <Route path="/threads" element={<ThreadPage />} />
@@ -64,8 +66,8 @@ function App() {
           } />
           
           {/* Individual Post Page (Public) */}
-          <Route path="/profile/:username/posts/:slug" element={<PostPage />} />
-          <Route path="/profile/:username/posts/:slug/edit" element={
+          <Route path="/u/:username/posts/:slug" element={<PostPage />} />
+          <Route path="/u/:username/posts/:slug/edit" element={
             <ProtectedRoute>
               <EditPostPage />
             </ProtectedRoute>

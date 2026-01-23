@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { getFlagEmoji } from '../../utils/countryUtils';
-import { MapPin, Flag, Globe, ChevronRight } from 'lucide-react';
+import { getFirstImageUrl, getTextPreview } from '../../utils/editorUtils';
+import { MapPin, Flag, Globe, ChevronRight, Image as ImageIcon } from 'lucide-react';
 
 /**
  * PostCard Component
@@ -18,8 +19,13 @@ const PostCard = ({ post, showLocationBadge = true }) => {
   const navigate = useNavigate();
 
   const handleReadMore = () => {
-    navigate(`/profile/${post.author_username}/posts/${post.slug}`);
+    navigate(`/u/${post.author_username}/posts/${post.slug}`);
   };
+
+  // Extract first image from Editor.js content
+  const thumbnailUrl = getFirstImageUrl(post.content);
+  // Extract text preview from content
+  const contentPreview = getTextPreview(post.content, 200);
 
   // Get location badge based on post scope
   const getLocationBadge = () => {
@@ -89,14 +95,23 @@ const PostCard = ({ post, showLocationBadge = true }) => {
 
       {/* Post Content */}
       <div className="cursor-pointer" onClick={handleReadMore}>
+        {/* Thumbnail Image */}
+        {thumbnailUrl && (
+          <div className="mb-4 -mx-6 -mt-2">
+            <img
+              src={thumbnailUrl}
+              alt={post.title}
+              className="w-full h-48 object-cover"
+              loading="lazy"
+            />
+          </div>
+        )}
+        
         <h2 className="text-xl font-bold text-[var(--text-color-ink)] mb-3 font-editorial hover:text-[var(--primary-color-royal)] transition-colors">
           {post.title}
         </h2>
-        <p className="text-[var(--text-color-ink-400)] leading-relaxed mb-4">
-          {post.content.length > 300 
-            ? `${post.content.substring(0, 300)}...` 
-            : post.content
-          }
+        <p className="text-[var(--text-color-ink-400)] leading-relaxed mb-4 line-clamp-3">
+          {contentPreview || 'No content preview available'}
         </p>
       </div>
 
