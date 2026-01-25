@@ -21,6 +21,7 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [authInitialized, setAuthInitialized] = useState(false);
@@ -43,14 +44,22 @@ export const AuthProvider = ({ children }) => {
       if (result.success && result.data.authenticated) {
         setUser(result.data);
         setIsAuthenticated(true);
+        const profileResult = await authService.getMe();
+        if (profileResult.success) {
+          setProfile(profileResult.data);
+        } else {
+          setProfile(null);
+        }
       } else {
         console.log('User is not authenticated');
         setUser(null);
+        setProfile(null);
         setIsAuthenticated(false);
       }
     } catch (error) {
       console.error('Auth initialization failed:', error.message);
       setUser(null);
+      setProfile(null);
       setIsAuthenticated(false);
     } finally {
       setIsLoading(false);
@@ -69,6 +78,12 @@ export const AuthProvider = ({ children }) => {
       if (authResult.success && authResult.data.authenticated) {
         setUser(authResult.data);
         setIsAuthenticated(true);
+        const profileResult = await authService.getMe();
+        if (profileResult.success) {
+          setProfile(profileResult.data);
+        } else {
+          setProfile(null);
+        }
       }
       
       toast.success('Login successful!');
@@ -91,6 +106,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       // Clear client state
       setUser(null);
+      setProfile(null);
       setIsAuthenticated(false);
       setIsLoading(false);
       navigate('/login');
@@ -121,15 +137,23 @@ export const AuthProvider = ({ children }) => {
       if (result.success && result.data.authenticated) {
         setUser(result.data);
         setIsAuthenticated(true);
+        const profileResult = await authService.getMe();
+        if (profileResult.success) {
+          setProfile(profileResult.data);
+        } else {
+          setProfile(null);
+        }
         return true;
       } else {
         setUser(null);
+        setProfile(null);
         setIsAuthenticated(false);
         return false;
       }
     } catch (error) {
       console.error('Failed to refresh auth state:', error);
       setUser(null);
+      setProfile(null);
       setIsAuthenticated(false);
       return false;
     }
@@ -232,6 +256,7 @@ export const AuthProvider = ({ children }) => {
 
   const value = {
     user,
+    profile,
     isAuthenticated,
     isLoading,
     login,

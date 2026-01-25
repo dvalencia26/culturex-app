@@ -4,7 +4,7 @@ from django.conf.urls.static import static
 from .views import (
     RegisterUserView, VerifyUserEmail, LoginUserView, PasswordResetConfirm, 
     PasswordResetRequestView, SetNewPassword, LogoutUserView, VerifyUserView, 
-    CSRFTokenView, CookieTokenRefreshView, get_user_profile_data, presign_image_upload, toggleFollow, 
+    CSRFTokenView, CookieTokenRefreshView, get_user_profile_data, MeView, ProfileUpdateView, presign_image_upload, presign_profile_upload, toggleFollow, 
     post_list_create, get_user_posts, post_detail, get_my_posts, get_countries_for_posts, 
     get_countries_with_posts, get_country_previews, get_cities_by_country, get_cities_with_posts_by_country,
     # Thread views
@@ -23,6 +23,7 @@ urlpatterns = [
     path('login/', LoginUserView.as_view(), name='login'),
     path('logout/', LogoutUserView.as_view(), name='logout'),
     path('verify/', VerifyUserView.as_view(), name='verify-user'),  # Check authentication status
+    path('me/', MeView.as_view(), name='me'),
 
     # Token Management
     path('token/refresh/', CookieTokenRefreshView.as_view(), name='refresh-token'), # 
@@ -37,6 +38,7 @@ urlpatterns = [
 
     # User Profile
     path('profile/<str:handle>/', get_user_profile_data, name='user-profile'),  # Get user profile data
+    path('profile/<str:handle>/update/', ProfileUpdateView.as_view(), name='profile-update'),
     path('toggle-follow/<str:handle>/', toggleFollow, name='toggle-follow'),  # Toggle follow/unfollow user
 
     # Posts
@@ -47,6 +49,7 @@ urlpatterns = [
 
     # Media Files
     path('presign-upload/', presign_image_upload, name='presign-upload'),  # POST: Get presigned URL for image upload
+    path('presign-profile-upload/', presign_profile_upload, name='presign-profile-upload'),
 
     # Location Data
     path('countries/', get_all_countries, name='all-countries'),  # GET: All countries

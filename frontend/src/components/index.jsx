@@ -4,5 +4,6 @@ import Profile from "./Profile";
 import ForgetPassword from "./ForgetPassword";
 import VerifyEmail from "./VerifyEmail";
 import ResetPassword from "./ResetPassword";
+import EditProfilePage from "./EditProfilePage";
 
-export { Signup, Login, Profile, ForgetPassword, VerifyEmail, ResetPassword };
+export { Signup, Login, Profile, ForgetPassword, VerifyEmail, ResetPassword, EditProfilePage };

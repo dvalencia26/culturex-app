@@ -19,6 +19,7 @@ const CreateThreadPage = () => {
 
     const handleSuccess = (thread) => {
         // Navigate to the new created thread page
+        sessionStorage.setItem('profileRefreshTab', 'threads');
         navigate(`/u/${thread.author_username}/threads/${thread.slug}`);
     };
 

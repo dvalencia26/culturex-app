@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from rest_framework.generics import GenericAPIView
 from .serializers import (LoginSerializer, UserRegisterSerializer, PasswordResetRequestSerializer, 
-                          SetNewPasswordSerializer, LogoutUserSerializer, ProfileSerializer, PostSerializer,
+                          SetNewPasswordSerializer, LogoutUserSerializer, ProfileSerializer, ProfileUpdateSerializer, PostSerializer,
                           ThreadCategorySerializer, ThreadSubcategorySerializer, ThreadSerializer, ThreadReplySerializer)
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -33,6 +33,144 @@ class Unaccent(models.Func):
     function = 'unaccent'
     template = "%(function)s(%(expressions)s)"
     output_field = CharField()
+
+# Presigned upload configuration for different upload types
+UPLOAD_CONFIG = {
+    'posts': {
+        'prefix': 'posts',
+        'with_thumb': True,
+        'max_mb': 10,
+        'thumb_mb': 1,
+        'include_media_prefix': False,
+    },
+    'profile': {
+        'prefix': 'profile_images',
+        'with_thumb': False,
+        'max_mb': 10,
+        'thumb_mb': None,
+        'include_media_prefix': True,
+    },
+}
+
+ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+EXT_MAP = {'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/webp': 'webp'}
+
+
+def _build_object_key(prefix, user_id, file_uuid, ext, include_media_prefix, is_thumb=False):
+    suffix = '_thumb' if is_thumb else ''
+    relative_name = f"{prefix}/{user_id}/{file_uuid}{suffix}.{ext}" # ex: posts/123/uuid_thumb.jpg
+    if include_media_prefix:
+        object_key = f"media/{relative_name}"
+    else:
+        object_key = relative_name
+    return relative_name, object_key
+
+
+def _generate_presigned_post(s3_client, bucket_name, object_key, content_type, max_bytes):
+    return s3_client.generate_presigned_post(
+        Bucket=bucket_name,
+        Key=object_key,
+        Fields={
+            'Content-Type': content_type,
+            'acl': 'public-read',
+        },
+        Conditions=[
+            {'Content-Type': content_type},
+            {'acl': 'public-read'},
+            ['content-length-range', 1, max_bytes],
+        ],
+        ExpiresIn=120
+    )
+
+
+def _presign_upload_payload(request, upload_type):
+    config = UPLOAD_CONFIG.get(upload_type)
+    if not config:
+        return None, Response({'error': 'Invalid upload type'}, status=status.HTTP_400_BAD_REQUEST)
+
+    content_type = request.data.get('content_type', 'image/jpeg')
+    if content_type not in ALLOWED_TYPES:
+        return None, Response(
+            {'error': f'Invalid content type. Allowed: {", ".join(ALLOWED_TYPES)}'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    ext = EXT_MAP.get(content_type, 'jpg') # Default to jpg if not found
+    file_uuid = uuid.uuid4()
+    user_id = request.user.id
+
+    try:
+        s3_client = boto3.client(
+            's3',
+            region_name=settings.AWS_S3_REGION_NAME,
+            endpoint_url=settings.AWS_S3_ENDPOINT_URL,
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        )
+        bucket_name = settings.AWS_STORAGE_BUCKET_NAME
+        cdn_base = f"https://{settings.AWS_S3_CDN_DOMAIN}"
+
+        relative_name, object_key = _build_object_key(
+            config['prefix'],
+            user_id,
+            file_uuid,
+            ext,
+            config['include_media_prefix']
+        )
+
+        original_presigned = _generate_presigned_post(
+            s3_client,
+            bucket_name,
+            object_key,
+            content_type,
+            config['max_mb'] * 1024 * 1024
+        )
+
+        if config['with_thumb']:
+            _, thumb_key = _build_object_key(
+                config['prefix'],
+                user_id,
+                file_uuid,
+                ext,
+                config['include_media_prefix'],
+                is_thumb=True
+            )
+            thumb_presigned = _generate_presigned_post(
+                s3_client,
+                bucket_name,
+                thumb_key,
+                content_type,
+                config['thumb_mb'] * 1024 * 1024
+            )
+
+            payload = {
+                'original': {
+                    'key': object_key,
+                    'upload': original_presigned,
+                    'url': f"{cdn_base}/{object_key}"
+                },
+                'thumb': {
+                    'key': thumb_key,
+                    'upload': thumb_presigned,
+                    'url': f"{cdn_base}/{thumb_key}"
+                }
+            }
+        else:
+            payload = {
+                'upload': original_presigned,
+                'url': f"{cdn_base}/{object_key}",
+                'name': relative_name,
+                'key': object_key
+            }
+
+        return payload, None
+
+    except Exception as e:
+        print(f"Presign error: {e}")
+        return None, Response(
+            {'error': 'Failed to generate upload URL'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 class RegisterUserView(GenericAPIView):
     serializer_class = UserRegisterSerializer
@@ -223,10 +361,25 @@ class VerifyUserView(GenericAPIView):
             'id': user.id,
             'email': user.email,
             'full_name': user.get_full_name,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
             'is_verified': user.is_verified,
             'username': username,  # Include username from profile
             'authenticated': True
         }, status=status.HTTP_200_OK)
+
+
+class MeView(GenericAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            profile = request.user.profile
+        except Profile.DoesNotExist:
+            return Response({'error': 'Profile not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = ProfileSerializer(profile, many=False, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class CSRFTokenView(GenericAPIView):
@@ -280,6 +433,43 @@ def get_user_profile_data(request, handle):
         return Response({'error': 'Profile not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ProfileUpdateView(GenericAPIView):
+    serializer_class = ProfileUpdateSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_profile(self, handle):
+        if handle.isdigit():
+            return Profile.objects.select_related('user').get(user__id=handle)
+        return Profile.objects.select_related('user').get(username=handle)
+
+    def patch(self, request, handle):
+        return self._update(request, handle, partial=True)
+
+    def put(self, request, handle):
+        return self._update(request, handle, partial=False)
+
+    def _update(self, request, handle, partial):
+        try:
+            profile = self.get_profile(handle)
+        except Profile.DoesNotExist:
+            return Response({'error': 'Profile not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.user != profile.user:
+            return Response({'error': 'You can only edit your own profile'}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = self.serializer_class(profile, data=request.data, partial=partial)
+        if serializer.is_valid():
+            serializer.save()
+            response_serializer = ProfileSerializer(profile, many=False, context={'request': request})
+            return Response({
+                **response_serializer.data,
+                'is_our_profile': True,
+                'following': False
+            }, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 
 @api_view(['POST'])
@@ -1201,91 +1391,20 @@ def presign_image_upload(request):
     Generate presigned POST data for direct upload to DigitalOcean Spaces.
     Returns presigned data for both original and thumbnail.
     """
-    content_type = request.data.get('content_type', 'image/jpeg')
-    
-    # Validate content type
-    allowed_types = ['image/jpeg','image/jpg', 'image/png', 'image/webp']
-    if content_type not in allowed_types:
-        return Response(
-            {'error': f'Invalid content type. Allowed: {", ".join(allowed_types)}'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
-    # Get file extension from content type
-    ext_map = {'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/webp': 'webp'}
-    ext = ext_map.get(content_type, 'jpg')
-    
-    # Generate unique keys for original and thumbnail
-    file_uuid = uuid.uuid4()
-    user_id = request.user.id
-    original_key = f"posts/{user_id}/{file_uuid}.{ext}"
-    thumb_key = f"posts/{user_id}/{file_uuid}_thumb.{ext}"
-    
-    try:
-        # Create a new connection to DigitalOcean Spaces using boto3
-        s3_client = boto3.client(
-            's3',
-            region_name=settings.AWS_S3_REGION_NAME,
-            endpoint_url=settings.AWS_S3_ENDPOINT_URL,
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        )
-        
-        # Define the bucket name from my existing bucket (from settings)
-        bucket_name = settings.AWS_STORAGE_BUCKET_NAME
-        
-        # Generate presigned POST for original (max 10MB)
-        original_presigned = s3_client.generate_presigned_post(
-            Bucket=bucket_name,
-            Key=original_key,
-            Fields={
-                'Content-Type': content_type,
-                'acl': 'public-read',
-            },
-            Conditions=[
-                {'Content-Type': content_type},
-                {'acl': 'public-read'},
-                ['content-length-range', 1, 10 * 1024 * 1024],  # 1 byte to 10MB
-            ],
-            ExpiresIn=120  # 2 minutes
-        )
-        
-        # Generate presigned POST for thumbnail (max 1MB)
-        # Signed URL will be used to upload the thumbnail after resizing on client side
-        thumb_presigned = s3_client.generate_presigned_post(
-            Bucket=bucket_name,
-            Key=thumb_key,
-            Fields={
-                'Content-Type': content_type,
-                'acl': 'public-read',
-            },
-            Conditions=[
-                {'Content-Type': content_type},
-                {'acl': 'public-read'},
-                ['content-length-range', 1, 1 * 1024 * 1024],  # 1 byte to 1MB
-            ],
-            ExpiresIn=120
-        )
-        
-        # Construct final URLs (using CDN domain)
-        cdn_base = f"https://{settings.AWS_S3_CDN_DOMAIN}"
-        
-        return Response({
-            'original': {
-                'key': original_key,
-                'upload': original_presigned,
-                'url': f"{cdn_base}/{original_key}"
-            },
-            'thumb': {
-                'key': thumb_key,
-                'upload': thumb_presigned,
-                'url': f"{cdn_base}/{thumb_key}"
-            }
-        })
-        
-    except Exception as e:
-        print(f"Presign error: {e}")
-        return Response(
-            {'error': 'Failed to generate upload URLs'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+    payload, error_response = _presign_upload_payload(request, 'posts')
+    if error_response:
+        return error_response
+    return Response(payload)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def presign_profile_upload(request):
+    """
+    Generate presigned POST data for profile image upload to DigitalOcean Spaces.
+    Returns presigned data and final URL for the uploaded image.
+    """
+    payload, error_response = _presign_upload_payload(request, 'profile')
+    if error_response:
+        return error_response
+    return Response(payload)

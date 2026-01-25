@@ -32,6 +32,34 @@ export const userService = {
     }
   },
 
+  // Update current user's profile
+  updateProfile: async (handle, profileData) => {
+    try {
+      const response = await axiosInstance.patch(`/auth/profile/${handle}/update/`, profileData);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Failed to update profile',
+      };
+    }
+  },
+
+  // Presign profile image upload
+  presignProfileImageUpload: async (contentType) => {
+    try {
+      const response = await axiosInstance.post('/auth/presign-profile-upload/', {
+        content_type: contentType,
+      });
+      return { success: true, data: response.data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Failed to generate upload URL',
+      };
+    }
+  },
+
 };
 
 export default userService;

@@ -86,7 +86,7 @@ const routeConfig = [
 
   // Thread Edit Page
   {
-    pattern: /^\/u\/[^\/]+\/threads\/([^\/]+)\/edit$/,
+    pattern: /^\/u\/[^\/]+\/threads\/([^\/]+)\/edit\/?$/,
     generate: (match) => {
       const slug = match[1];
       const title = formatSlugToTitle(slug);
@@ -101,7 +101,7 @@ const routeConfig = [
 
   // Thread Detail Page
   {
-    pattern: /^\/u\/[^\/]+\/threads\/([^\/]+)$/,
+    pattern: /^\/u\/[^\/]+\/threads\/([^\/]+)\/?$/,
     generate: (match) => {
       const slug = match[1];
       const title = formatSlugToTitle(slug);
@@ -210,6 +210,16 @@ const routeConfig = [
     generate: () => [
       { label: 'Home', path: '/', icon: Home },
       { label: 'Create Discussion', path: null}
+    ]
+  },
+  
+  // Update Profile Page
+  {
+    pattern: /^\/settings\/profile$/,
+    generate: () => [
+      { label: 'Home', path: '/', icon: Home },
+      { label: 'Settings', path: '/settings' },
+      { label: 'Update Profile', path: null}
     ]
   }
 ];

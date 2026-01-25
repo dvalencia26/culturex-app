@@ -68,7 +68,8 @@ const EditPostPage = () => {
   const handleSuccess = (updatedPost) => {
     toast.success('Post updated successfully!');
     // Navigate to the updated post page, the slug is updated in the backend.
-    navigate(`/profile/${updatedPost.author_username}/posts/${updatedPost.slug}`);
+    sessionStorage.setItem('profileRefreshTab', 'posts');
+    navigate(`/u/${updatedPost.author_username}/posts/${updatedPost.slug}`);
   };
 
   const handleCancel = () => {

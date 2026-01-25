@@ -10,6 +10,7 @@ from django.urls import reverse
 from .utils import send_normal_email, get_full_image_url
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from django.conf import settings
+from urllib.parse import urlparse
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):
@@ -228,6 +229,50 @@ class ProfileSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.profile_image.url)
             return obj.profile_image.url
         return None
+
+
+class ProfileUpdateSerializer(serializers.ModelSerializer):
+    first_name = serializers.CharField(source='user.first_name', required=False)
+    last_name = serializers.CharField(source='user.last_name', required=False)
+    profile_image_key = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+
+    class Meta:
+        model = Profile
+        fields = [
+            'username', 'bio', 'facebook_url', 'instagram_url',
+            'twitter_url', 'tiktok_url', 'first_name', 'last_name',
+            'profile_image_key'
+        ]
+
+    def _normalize_image_key(self, value):
+        if not value:
+            return ''
+        if value.startswith('http'):
+            parsed = urlparse(value)
+            path = parsed.path or ''
+            if '/media/' in path:
+                return path.split('/media/', 1)[1]
+            return path.lstrip('/')
+        return value.lstrip('/')
+
+    def update(self, instance, validated_data):
+        user_data = validated_data.pop('user', {})
+        image_key = validated_data.pop('profile_image_key', None)
+
+        if user_data:
+            user = instance.user
+            for attr, value in user_data.items():
+                setattr(user, attr, value)
+            user.save(update_fields=list(user_data.keys()))
+
+        if image_key is not None:
+            normalized = self._normalize_image_key(image_key)
+            if normalized:
+                instance.profile_image.name = normalized
+            else:
+                instance.profile_image = None
+
+        return super().update(instance, validated_data)
         
 
 class PostSerializer(serializers.ModelSerializer):

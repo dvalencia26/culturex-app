@@ -4,6 +4,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider } from './contexts/AuthContext'
 import { Toaster } from 'sonner'
 import Navbar from './components/ui/Navbar'
+import EditProfilePage from './components/EditProfilePage'
 import Home from './pages/Home'
 import PageNotFound from './pages/PageNotFound'
 import Breadcrumbs from './components/ui/Breadcrumbs'
@@ -33,6 +34,11 @@ function App() {
           <Route path="/profile/:handle" element={
             <ProtectedRoute>
               <Profile />
+            </ProtectedRoute>
+          } />
+          <Route path="/settings/profile" element={
+            <ProtectedRoute>
+              <EditProfilePage />
             </ProtectedRoute>
           } />
           <Route path="/otp/verify" element={<VerifyEmail />} />

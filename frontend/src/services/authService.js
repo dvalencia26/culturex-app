@@ -60,6 +60,19 @@ export const authService = {
     }
   },
 
+  // Get current user's profile
+  getMe: async () => {
+    try {
+      const response = await axiosInstance.get('/auth/me/');
+      return { success: true, data: response.data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Failed to fetch profile',
+      };
+    }
+  },
+
   // Email Verification
   verifyEmail: async (otp) => {
     try {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { userService } from '../services/userService';
 import postService from '../services/postService';
 import { threadService } from '../services/threadService';
@@ -10,9 +10,10 @@ import ThreadProfileCard from './ui/ThreadProfileCard';
 import { BadgeCheck } from 'lucide-react';
 
 const Profile = () => {
-  const { user, logout } = useAuth();
+  const { user, profile: authProfile, logout } = useAuth();
   const { handle } = useParams(); // Get handle from URL using react-router
   const navigate = useNavigate(); 
+  const location = useLocation();
   
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -27,8 +28,13 @@ const Profile = () => {
   // Posts and Threads
   const [posts, setPosts] = useState([]);
   const [postsLoading, setPostsLoading] = useState(false);
+  const [postsLoaded, setPostsLoaded] = useState(false);
+  const [drafts, setDrafts] = useState([]);
+  const [draftsLoading, setDraftsLoading] = useState(false);
+  const [draftsLoaded, setDraftsLoaded] = useState(false);
   const [threads, setThreads] = useState([]);
   const [threadsLoading, setThreadsLoading] = useState(false);
+  const [threadsLoaded, setThreadsLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState('posts'); // 'posts', 'threads', 'drafts'
 
   // Determine if this profile belongs to the logged-in user 
@@ -43,6 +49,14 @@ const Profile = () => {
 
       try {
         setLoading(true);
+        if (user?.username && authProfile && profileIdentifier === user.username) {
+          setProfile(authProfile);
+          setIsOurProfile(true);
+          setFollowing(false);
+          setFollowerCount(authProfile.followers_count || 0);
+          setFollowingCount(authProfile.following_count || 0);
+          return;
+        }
         const result = await userService.getUserProfile(profileIdentifier);
         if (result.success) {
           setProfile(result.data);
@@ -63,80 +77,126 @@ const Profile = () => {
     };
 
     fetchProfile();
-  }, [profileIdentifier]); // Re-fetch when profileIdentifier changes
-
+  }, [profileIdentifier, user?.username, authProfile]); // Re-fetch when profileIdentifier changes
   // Fetch user posts
   useEffect(() => {
-    const fetchPosts = async () => {
-      if (!profile?.username) return;
-      
-      setPostsLoading(true);
-      try {
-        // Use getMyPosts for own profile (includes published posts only for posts tab)
-        // Use getUserPosts for other users' profiles
-        const result = isOurProfile 
-          ? await postService.getMyPosts('published')
-          : await postService.getUserPosts(profile.username);
-        
-        if (result.success && result.data) {
-          // Handle both response formats
-          const postsData = result.data.posts || result.data;
-          setPosts(Array.isArray(postsData) ? postsData : []);
-        }
-      } catch (err) {
-        console.error('Error fetching posts:', err);
-      } finally {
-        setPostsLoading(false);
-      }
-    };
+    setPosts([]);
+    setDrafts([]);
+    setThreads([]);
+    setPostsLoading(false);
+    setDraftsLoading(false);
+    setThreadsLoading(false);
+    setPostsLoaded(false);
+    setDraftsLoaded(false);
+    setThreadsLoaded(false);
+  }, [profileIdentifier]);
 
-    const fetchDrafts = async () => {
-      if (!profile?.username || !isOurProfile) return;
-      
-      setPostsLoading(true);
-      try {
-        const result = await postService.getMyPosts('draft');
-        if (result.success && result.data) {
-          const postsData = result.data.posts || result.data;
-          setPosts(Array.isArray(postsData) ? postsData : []);
-        }
-      } catch (err) {
-        console.error('Error fetching drafts:', err);
-      } finally {
-        setPostsLoading(false);
-      }
-    };
+  useEffect(() => {
+    const storedRefreshTab = sessionStorage.getItem('profileRefreshTab');
+    const refreshTab = location.state?.refreshTab || storedRefreshTab;
+    if (!refreshTab) return;
 
-    const fetchThreads = async () => {
-      if (!profile?.username) return;
-      
-      setThreadsLoading(true);
-      try {
-        // Use getMyThreads for own profile, getUserThreads for others
-        const result = isOurProfile
-          ? await threadService.getMyThreads()
-          : await threadService.getUserThreads(profile.username);
-        
-        if (result.success && result.data) {
-          // Handle both response formats
-          const threadsData = result.data.threads || result.data;
-          setThreads(Array.isArray(threadsData) ? threadsData : []);
-        }
-      } catch (err) {
-        console.error('Error fetching threads:', err);
-      } finally {
-        setThreadsLoading(false);
-      }
-    };
+    if (refreshTab === 'posts') {
+      setPostsLoaded(false);
+    } else if (refreshTab === 'drafts') {
+      setDraftsLoaded(false);
+    } else if (refreshTab === 'threads') {
+      setThreadsLoaded(false);
+    }
 
-    if (activeTab === 'posts') {
+    navigate(location.pathname, { replace: true, state: {} });
+    if (storedRefreshTab) {
+      sessionStorage.removeItem('profileRefreshTab');
+    }
+  }, [location.state, navigate, location.pathname]);
+
+  const fetchPosts = async () => {
+    if (!profile?.username) return;
+
+    setPostsLoading(true);
+    try {
+      // Use getMyPosts for own profile (includes published posts only for posts tab)
+      // Use getUserPosts for other users' profiles
+      const result = isOurProfile
+        ? await postService.getMyPosts('published')
+        : await postService.getUserPosts(profile.username);
+
+      if (result.success && result.data) {
+        // Handle both response formats
+        const postsData = result.data.posts || result.data;
+        setPosts(Array.isArray(postsData) ? postsData : []);
+        setPostsLoaded(true);
+      }
+    } catch (err) {
+      console.error('Error fetching posts:', err);
+    } finally {
+      setPostsLoading(false);
+    }
+  };
+
+  const fetchDrafts = async () => {
+    if (!profile?.username || !isOurProfile) return;
+
+    setDraftsLoading(true);
+    try {
+      const result = await postService.getMyPosts('draft');
+      if (result.success && result.data) {
+        const postsData = result.data.posts || result.data;
+        setDrafts(Array.isArray(postsData) ? postsData : []);
+        setDraftsLoaded(true);
+      }
+    } catch (err) {
+      console.error('Error fetching drafts:', err);
+    } finally {
+      setDraftsLoading(false);
+    }
+  };
+
+  const fetchThreads = async () => {
+    if (!profile?.username) return;
+
+    setThreadsLoading(true);
+    try {
+      // Use getMyThreads for own profile, getUserThreads for others
+      const result = isOurProfile
+        ? await threadService.getMyThreads()
+        : await threadService.getUserThreads(profile.username);
+
+      if (result.success && result.data) {
+        // Handle both response formats
+        const threadsData = result.data.threads || result.data;
+        setThreads(Array.isArray(threadsData) ? threadsData : []);
+        setThreadsLoaded(true);
+      }
+    } catch (err) {
+      console.error('Error fetching threads:', err);
+    } finally {
+      setThreadsLoading(false);
+    }
+  };
+
+  // Fetch user posts, drafts, and threads only once per tab
+  useEffect(() => {
+    if (!profile?.username) return;
+
+    if (activeTab === 'posts' && !postsLoaded && !postsLoading) {
       fetchPosts();
-    } else if (activeTab === 'drafts') {
+    } else if (activeTab === 'drafts' && !draftsLoaded && !draftsLoading) {
       fetchDrafts();
-    } else if (activeTab === 'threads') {
+    } else if (activeTab === 'threads' && !threadsLoaded && !threadsLoading) {
       fetchThreads();
     }
-  }, [profile?.username, activeTab, isOurProfile]);
+  }, [
+    profile?.username,
+    activeTab,
+    isOurProfile,
+    postsLoaded,
+    postsLoading,
+    draftsLoaded,
+    draftsLoading,
+    threadsLoaded,
+    threadsLoading,
+  ]);
 
   // Handle follow/unfollow action
   const handleToggleFollow = async () => {
@@ -272,8 +332,22 @@ const Profile = () => {
                   className="w-10 h-10 rounded-full bg-[#1877F2] flex items-center justify-center hover:scale-110 transition-transform"
                   aria-label="Facebook"
                 >
-                  <svg className="w-4 h-4" fill="white">
+                  <svg className="w-5 h-5" fill="white">
                     <use href="/sprite.svg#facebook" />
+                  </svg>
+                </a>
+              )}
+
+              {profile?.tiktok_url && (
+                <a
+                  href={profile.tiktok_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 rounded-full bg-black flex items-center justify-center hover:scale-110 transition-transform"
+                  aria-label="TikTok"
+                >
+                  <svg className="w-4 h-4" fill="white">
+                    <use href="/sprite.svg#tiktok" />
                   </svg>
                 </a>
               )}
@@ -380,7 +454,7 @@ const Profile = () => {
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--primary-color-royal)]" />
                   </div>
                 ) : posts.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {posts.map((post) => (
                       <ProfilePostCard key={post.id} post={post} />
                     ))}
@@ -419,13 +493,13 @@ const Profile = () => {
 
             {activeTab === 'drafts' && (
               <>
-                {postsLoading ? (
+                {draftsLoading ? (
                   <div className="flex justify-center py-12">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--primary-color-royal)]" />
                   </div>
-                ) : posts.length > 0 ? (
+                ) : drafts.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {posts.map((post) => (
+                    {drafts.map((post) => (
                       <ProfilePostCard key={post.id} post={post} />
                     ))}
                   </div>

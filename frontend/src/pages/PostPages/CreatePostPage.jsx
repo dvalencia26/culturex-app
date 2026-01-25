@@ -20,6 +20,7 @@ const CreatePostPage = () => {
   const handlePostSuccess = (post) => {
     toast.success('Post created successfully!');
     // Navigate to the newly created post
+    sessionStorage.setItem('profileRefreshTab', 'posts');
     navigate(`/u/${post.author_username}/posts/${post.slug}`);
   };
 

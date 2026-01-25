@@ -71,6 +71,7 @@ const EditThreadPage = () => {
   const handleSuccess = (updatedThread) => {
     toast.success('Thread updated successfully!');
     // Navigate to the updated thread page , the slug is updated in the backend.
+    sessionStorage.setItem('profileRefreshTab', 'threads');
     navigate(`/u/${updatedThread.author_username}/threads/${updatedThread.slug}`);
   };
 
