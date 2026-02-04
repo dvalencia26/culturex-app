@@ -9,6 +9,31 @@ import axiosInstance from '../utils/axiosInstance';
  */
 
 export const authService = {
+  // Normalize API validation errors into a readable message for the frontend
+  _formatError: (error, fallback) => {
+    const data = error.response?.data;
+    if (!data) return fallback;
+
+    if (typeof data === 'string') return data;
+    if (data.detail) return data.detail;
+    if (data.error) return data.error;
+
+    if (Array.isArray(data.non_field_errors)) {
+      return data.non_field_errors.join(' ');
+    }
+
+    // Handle field-specific errors
+    const messages = Object.entries(data)
+      .flatMap(([field, value]) => {
+        if (!value) return [];
+        if (Array.isArray(value)) {
+          return value.map((msg) => `${field.replace('_', ' ')}: ${msg}`);
+        }
+        return [`${field.replace('_', ' ')}: ${value}`];
+      });
+
+    return messages.length ? messages.join(' ') : fallback;
+  },
   // User Registration
   register: async (userData) => {
     try {
@@ -17,7 +42,7 @@ export const authService = {
     } catch (error) {
       return { 
         success: false, 
-        error: error.response?.data?.detail || 'Registration failed' 
+        error: authService._formatError(error, 'Registration failed') 
       };
     }
   },
@@ -74,9 +99,9 @@ export const authService = {
   },
 
   // Email Verification
-  verifyEmail: async (otp) => {
+  verifyEmail: async (payload) => {
     try {
-      const response = await axiosInstance.post('/auth/verify-email/', { otp });
+      const response = await axiosInstance.post('/auth/verify-email/', payload);
       return { success: true, data: response.data };
     } catch (error) {
       return { 
@@ -86,10 +111,23 @@ export const authService = {
     }
   },
 
-  // Password Reset Request
-  requestPasswordReset: async (email) => {
+  // Resend verification code
+  resendOtp: async (payload) => {
     try {
-      const response = await axiosInstance.post('/auth/password-reset/', { email });
+      const response = await axiosInstance.post('/auth/resend-otp/', payload);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Failed to resend code'
+      };
+    }
+  },
+
+  // Password Reset Request
+  requestPasswordReset: async (payload) => {
+    try {
+      const response = await axiosInstance.post('/auth/password-reset/', payload);
       return { success: true, data: response.data };
     } catch (error) {
       return { 
@@ -132,6 +170,20 @@ export const authService = {
       return { 
         success: false, 
         error: error.response?.data?.detail || 'Google authentication failed' 
+      };
+    }
+  },
+  // Check email availability
+  checkEmailAvailability: async (email) => {
+    try {
+      const response = await axiosInstance.get('/auth/check-email/', {
+        params: { email }
+      });
+      return { success: true, data: response.data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Email check failed'
       };
     }
   }

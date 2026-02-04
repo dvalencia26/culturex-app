@@ -16,13 +16,18 @@ from urllib.parse import urlparse
 class UserRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(max_length=128, min_length=8, write_only=True)
     password2 = serializers.CharField(max_length=128, min_length=8, write_only=True)
+    website = serializers.CharField(required=False, allow_blank=True, write_only=True)
 
     class Meta:
         model = User
-        fields = ['email', 'first_name', 'last_name', 'password', 'password2']
+        fields = ['email', 'first_name', 'last_name', 'password', 'password2', 'website']
 
 
     def validate(self, attrs):
+        website = attrs.get('website', '')
+        if website:
+            raise serializers.ValidationError("Invalid submission.")
+
         password = attrs.get('password', '')
         password2 = attrs.get('password2', '')
 
@@ -39,6 +44,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             last_name=validated_data.get('last_name', ''),
             password=validated_data['password']
         )
+        Profile.objects.create(user=user) # Creates a profile for the user upon signup
         return user
 
 class LoginSerializer(serializers.Serializer):
@@ -94,28 +100,35 @@ class LoginSerializer(serializers.Serializer):
 
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=255, required=True)
+    website = serializers.CharField(required=False, allow_blank=True, write_only=True)
 
     class Meta:
-        fields = ['email']
+        fields = ['email', 'website']
 
     def validate(self, attrs):
         email = attrs.get('email')
+        website = attrs.get('website', '')
+        if website:
+            raise serializers.ValidationError("Invalid submission.")
 
         # check if user exists in database
         if User.objects.filter(email=email).exists():
             user = User.objects.get(email=email)
             uidb64 = urlsafe_base64_encode(smart_bytes(user.id)) # We're encoding the user ID that we get from the url
             token = PasswordResetTokenGenerator().make_token(user)
-            request = self.context.get('request') # We're getting the request object from the context in views function
-            site_domain = get_current_site(request).domain
-            relative_link = reverse('password-reset-confirm', kwargs={'uidb64': uidb64, 'token': token}) # We pass this into the url that we sent the user
-            absolute_link = f"http://{site_domain}{relative_link}"
+            frontend_base = settings.FRONTEND_URL.rstrip('/') # Get frontend URL from settings
+            absolute_link = f"{frontend_base}/password-reset-confirm/{uidb64}/{token}" # Construct the absolute link for password reset
 
-            email_body = f"Hello, \n Use the link below to reset your password \n {absolute_link}"
-            data = {'email_body': email_body,
-                    'email_subject': 'Reset your password',
-                    'to_email': user.email
-                    }
+            data = {
+                'email_subject': 'Reset your password',
+                'to_email': user.email,
+                'html_template': 'password_reset.html',
+                'text_template': 'password_reset.txt',
+                'context': {
+                    'first_name': user.first_name,
+                    'reset_link': absolute_link,
+                },
+            }
             send_normal_email(data)
 
         return email

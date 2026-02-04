@@ -178,20 +178,26 @@ const CountryPage = () => {
                     onClick={() => navigate(`/countries/${countryCode}/threads`)}
                     className="bg-[var(--primary-color-royal)] text-white px-6 py-3 rounded-input font-semibold hover:bg-[var(--primary-color-royal-600)] transition-colors flex items-center gap-2"
                   >
-                    View all Threads ({threadCount})
+                    Go to Discussions ({threadCount})
                   </button>
                 </div>
               ) : (
-                <div className="bg-[var(--color-background-cream)] border border-[var(--color-border-sand)] rounded-lg p-6 max-w-2xl mx-auto text-center">
+                <div className="bg-white] shadow-md rounded-lg p-6 hover:shadow-xl  transition-shadow max-w-2xl mx-auto text-center">
                   <p className="text-[var(--text-color-ink-400)] mb-4">
-                    No discussions about {countryName} yet.
+                    Be the first to start a discussion!
                   </p>
+                  <button
+                    onClick={() => navigate('/create-thread')}
+                    className="bg-[var(--primary-color-royal)] text-white px-6 py-3 rounded-input font-semibold hover:bg-[var(--primary-color-royal-600)] transition-colors"
+                    >
+                      Create a Discussion Thread
+                    </button>
                   {user && (
                     <button
                       onClick={() => navigate(`/countries/${countryCode}/threads/new`)}
                       className="bg-[var(--primary-color-royal)] text-white px-6 py-3 rounded-input font-semibold hover:bg-[var(--primary-color-royal-600)] transition-colors"
                     >
-                      Read Threads about {countryName}
+                      Read Discussion Posts about {countryName}
                     </button>
                   )}
                 </div>

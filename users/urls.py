@@ -4,7 +4,7 @@ from django.conf.urls.static import static
 from .views import (
     RegisterUserView, VerifyUserEmail, LoginUserView, PasswordResetConfirm, 
     PasswordResetRequestView, SetNewPassword, LogoutUserView, VerifyUserView, 
-    CSRFTokenView, CookieTokenRefreshView, get_user_profile_data, MeView, ProfileUpdateView, presign_image_upload, presign_profile_upload, toggleFollow, 
+    CSRFTokenView, CookieTokenRefreshView, get_user_profile_data, MeView, ProfileUpdateView, presign_image_upload, presign_profile_upload, toggleFollow, resend_otp, check_email_availability,
     post_list_create, get_user_posts, post_detail, get_my_posts, get_countries_for_posts, 
     get_countries_with_posts, get_country_previews, get_cities_by_country, get_cities_with_posts_by_country,
     # Thread views
@@ -24,6 +24,8 @@ urlpatterns = [
     path('logout/', LogoutUserView.as_view(), name='logout'),
     path('verify/', VerifyUserView.as_view(), name='verify-user'),  # Check authentication status
     path('me/', MeView.as_view(), name='me'),
+    path('resend-otp/', resend_otp, name='resend-otp'),
+    path('check-email/', check_email_availability, name='check-email'),
 
     # Token Management
     path('token/refresh/', CookieTokenRefreshView.as_view(), name='refresh-token'), # 

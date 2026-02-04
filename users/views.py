@@ -11,6 +11,7 @@ from .utils import send_code_via_email
 from .models import OneTimePassword, User, Profile, Post, ThreadCategory, ThreadSubcategory, Thread, ThreadReply
 from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import smart_str, DjangoUnicodeDecodeError
+from django.utils import timezone
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
@@ -183,11 +184,15 @@ class RegisterUserView(GenericAPIView):
         if serializer.is_valid(raise_exception=True):
             serializer.save()
             user = serializer.data # Get the created user data
-            send_code_via_email(user['email']) # Note: In production, use celery to send emails asynchronously
+            email_sent, error = send_code_via_email(user['email']) # Note: In production, use celery to send emails asynchronously
 
             return Response({
                 'data': user,
-                'message': f'Hi {user["first_name"]}, Thanks for signing up! Please check your email for verification.'
+                'message': (
+                    f'Hi {user["first_name"]}, Thanks for signing up! Please check your email for verification.'
+                    if email_sent else
+                    f'Hi {user["first_name"]}, Thanks for signing up! Verification email could not be sent yet.'
+                )
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -195,13 +200,39 @@ class RegisterUserView(GenericAPIView):
 class VerifyUserEmail(GenericAPIView):
     def post(self, request):
         otpcode = request.data.get('otp')
+        email = request.data.get('email')
         try:
-            # Get the user associated with the OTP unique code
-            user_code_obj= OneTimePassword.objects.get(code=otpcode) 
-            user = user_code_obj.user
+            if not email:
+                return Response({
+                    'error': 'Email is required.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            user = User.objects.get(email=email)
+            user_code_obj = OneTimePassword.objects.get(user=user)
+
+            if user_code_obj.expires_at < timezone.now():
+                user_code_obj.delete()
+                return Response({
+                    'error': 'OTP has expired. Please request a new one.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if user_code_obj.attempts >= 3:
+                user_code_obj.delete()
+                return Response({
+                    'error': 'Too many attempts. Please request a new OTP.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if user_code_obj.code != otpcode:
+                user_code_obj.attempts += 1
+                user_code_obj.save(update_fields=['attempts'])
+                return Response({
+                    'error': 'Invalid OTP code.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
             if not user.is_verified:
                 user.is_verified = True
                 user.save()
+                user_code_obj.delete()
                 return Response({
                     'message': 'Email verified successfully!'
                 }, status=status.HTTP_200_OK)
@@ -211,10 +242,46 @@ class VerifyUserEmail(GenericAPIView):
             }, status=status.HTTP_204_NO_CONTENT)
 
         # The code does not exist, raise an error
-        except OneTimePassword.DoesNotExist:
+        except (OneTimePassword.DoesNotExist, User.DoesNotExist):
             return Response({
                 'error': 'Invalid or expired OTP code.'
             }, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['POST'])
+def resend_otp(request):
+    email = request.data.get('email')
+    website = request.data.get('website', '')
+
+    if website:
+        return Response({'error': 'Invalid submission.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not email:
+        return Response({'error': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    if user.is_verified:
+        return Response({'message': 'Email already verified.'}, status=status.HTTP_200_OK)
+
+    email_sent, error = send_code_via_email(email)
+    if not email_sent:
+        return Response({'error': error or 'Too many requests.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+    return Response({'message': 'Verification code resent.'}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+def check_email_availability(request):
+    email = request.GET.get('email', '').strip().lower()
+    if not email:
+        return Response({'error': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    exists = User.objects.filter(email__iexact=email).exists()
+    return Response({'available': not exists}, status=status.HTTP_200_OK)
 
 
 class LoginUserView(GenericAPIView):

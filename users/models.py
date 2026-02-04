@@ -116,7 +116,10 @@ class Profile(models.Model):
 
 class OneTimePassword(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    code = models.CharField(max_length=6, unique=True)
+    code = models.CharField(max_length=6)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
 
     def __str__(self):
         return f"{self.user.first_name} - passcode"

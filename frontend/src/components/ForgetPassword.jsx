@@ -4,12 +4,16 @@ import { useAuth } from '../contexts/AuthContext';
 
 const ForgetPassword = () => {
   const [email, setEmail] = useState('');
+  const [website, setWebsite] = useState('');
   const { requestPasswordReset, isLoading } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (website) {
+      return;
+    }
     if (email) {
-      const result = await requestPasswordReset(email);
+      const result = await requestPasswordReset({ email, website });
       if (result.success) {
         setEmail(''); // Clear form on success
       }
@@ -26,6 +30,16 @@ const ForgetPassword = () => {
         </p>
 
         <form onSubmit={handleSubmit} className="w-full flex flex-col gap-7">
+          <input
+            type="text"
+            name="website"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+            autoComplete="off"
+            tabIndex="-1"
+            className="hidden"
+            aria-hidden="true"
+          />
           <div>
             <label htmlFor="email" className="text-[var(--text-color-ink)] font-semibold block mb-2 text-lg">Email Address</label>
             <input

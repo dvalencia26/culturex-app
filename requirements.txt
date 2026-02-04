@@ -11,3 +11,4 @@ tzdata==2022.6
 Pillow==9.2.0
 django-countries==7.2
 python-slugify==6.1.2
+mailtrap==2.0.1

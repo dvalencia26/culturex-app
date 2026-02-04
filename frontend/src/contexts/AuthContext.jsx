@@ -189,11 +189,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Email Verification
-  const verifyEmail = async (otp) => {
+  const verifyEmail = async (data) => {
     setIsLoading(true);
     
     try {
-      const result = await authService.verifyEmail(otp);
+      const payload = typeof data === 'string' ? { otp: data } : data;
+      const result = await authService.verifyEmail(payload);
       
       if (result.success) {
         toast.success('Email verified successfully! You can now login.');
@@ -210,12 +211,32 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const resendOtp = async (payload) => {
+    setIsLoading(true);
+    try {
+      const result = await authService.resendOtp(payload);
+      if (result.success) {
+        toast.success(result.data?.message || 'Verification code resent.');
+        return { success: true };
+      } else {
+        toast.error(result.error);
+        return { success: false, error: result.error };
+      }
+    } catch (error) {
+      toast.error('Failed to resend code. Please try again.');
+      return { success: false, error: error.message };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Password Reset Request
-  const requestPasswordReset = async (email) => {
+  const requestPasswordReset = async (payload) => {
     setIsLoading(true);
     
     try {
-      const result = await authService.requestPasswordReset(email);
+      const data = typeof payload === 'string' ? { email: payload } : payload;
+      const result = await authService.requestPasswordReset(data);
       
       if (result.success) {
         toast.success('Password reset email sent! Please check your inbox.');
@@ -265,6 +286,7 @@ export const AuthProvider = ({ children }) => {
     refreshAuthState,
     googleAuth,
     verifyEmail,
+    resendOtp,
     requestPasswordReset,
     setNewPassword,
   };

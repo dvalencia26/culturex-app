@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
+import { Eye, EyeOff } from 'lucide-react';
+import authService from '../services/authService';
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -16,8 +18,13 @@ const Signup = () => {
     first_name: '',
     last_name: '',
     password: '',
-    password2: ''
+    password2: '',
+    website: ''
   });
+  const [formError, setFormError] = useState('');
+  const [emailStatus, setEmailStatus] = useState('idle');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPassword2, setShowPassword2] = useState(false);
 
   const handleSignupWithGoogle = async (response) => {
     console.log("Google Sign-In response:", response);
@@ -48,7 +55,39 @@ const Signup = () => {
   }, []);
       
   
-  const {email, first_name, last_name, password, password2} = formData;
+  const {email, first_name, last_name, password, password2, website} = formData;
+
+  useEffect(() => {
+    let isActive = true;
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail) {
+      setEmailStatus('idle');
+      return;
+    }
+
+    const emailPattern = /^\S+@\S+\.\S+$/;
+    if (!emailPattern.test(normalizedEmail)) {
+      setEmailStatus('invalid');
+      return;
+    }
+
+    setEmailStatus('checking');
+    const timer = setTimeout(async () => {
+      const result = await authService.checkEmailAvailability(normalizedEmail);
+      if (!isActive) return;
+      if (result.success) {
+        setEmailStatus(result.data.available ? 'available' : 'taken');
+      } else {
+        setEmailStatus('error');
+      }
+    }, 500);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timer);
+    };
+  }, [email]);
 
   const handleChange = (e) => {
     setFormData({...formData, [e.target.name]: e.target.value});
@@ -56,15 +95,26 @@ const Signup = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setFormError('');
+    if (website) {
+      return;
+    }
     if (!email || !first_name || !last_name || !password || !password2) {
       toast.error('Please fill in all fields');
+      return;
+    }
+    if (emailStatus === 'taken') {
+      setFormError('This email is already in use. Try another one or log in.');
       return;
     }
 
     const result = await register(formData);
     
     if (result.success) {
+      localStorage.setItem('pendingEmail', email);
       navigate('/otp/verify');
+    } else if (result.error) {
+      setFormError(result.error);
     }
   }
 
@@ -73,6 +123,16 @@ const Signup = () => {
       <div className="w-full max-w-2xl bg-[var(--color-white)] rounded-card shadow-card p-12 border-2 border-[var(--border-color-line)] flex flex-col items-center">
         <h1 className="text-[var(--primary-color-royal)] text-center mb-10 tracking-wide text-4xl font-extrabold drop-shadow-lg font-editorial">Create Your Account</h1>
         <form className="w-full flex flex-col gap-7" onSubmit={handleSubmit}>
+          <input
+            type="text"
+            name="website"
+            value={website}
+            onChange={handleChange}
+            autoComplete="off"
+            tabIndex="-1"
+            className="hidden"
+            aria-hidden="true"
+          />
           <div>
             <label htmlFor="email" className="text-[var(--text-color-ink)] font-semibold block mb-2 text-lg">Email</label>
             <input 
@@ -84,6 +144,18 @@ const Signup = () => {
               required 
               className="w-full p-3 border-2 border-[var(--border-color-line)] rounded-input focus:outline-none focus:ring-2 focus:ring-[var(--primary-color-royal)] focus:border-[var(--primary-color-royal)] bg-[var(--color-white)] text-[var(--text-color-ink)] text-base transition-all duration-200" 
             />
+            {emailStatus === 'checking' && (
+              <p className="mt-2 text-sm text-[var(--text-color-ink-400)]">Checking email availability...</p>
+            )}
+            {emailStatus === 'available' && (
+              <p className="mt-2 text-sm text-green-600">Email is available.</p>
+            )}
+            {emailStatus === 'taken' && (
+              <p className="mt-2 text-sm text-red-600">This email is already in use.</p>
+            )}
+            {emailStatus === 'invalid' && (
+              <p className="mt-2 text-sm text-red-600">Enter a valid email address.</p>
+            )}
           </div>
           <div className="flex gap-6">
             <div className="flex-1">
@@ -114,29 +186,60 @@ const Signup = () => {
           <div className="flex gap-6">
             <div className="flex-1">
               <label htmlFor="password" className="text-[var(--text-color-ink)] font-semibold block mb-2 text-lg">Password</label>
-              <input 
-                type="password" 
-                id="password" 
-                name="password" 
-                value={password} 
-                onChange={handleChange} 
-                required 
-                className="w-full p-3 border-2 border-[var(--border-color-line)] rounded-input focus:outline-none focus:ring-2 focus:ring-[var(--secondary-color-orchid)] focus:border-[var(--secondary-color-orchid)] bg-[var(--color-white)] text-[var(--text-color-ink)] text-base transition-all duration-200" 
-              />
+              <div className="relative">
+                <input 
+                  type={showPassword ? 'text' : 'password'} 
+                  id="password" 
+                  name="password" 
+                  value={password} 
+                  onChange={handleChange} 
+                  required 
+                  className="w-full p-3 pr-12 border-2 border-[var(--border-color-line)] rounded-input focus:outline-none focus:ring-2 focus:ring-[var(--secondary-color-orchid)] focus:border-[var(--secondary-color-orchid)] bg-[var(--color-white)] text-[var(--text-color-ink)] text-base transition-all duration-200" 
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-color-ink-400)] hover:text-[var(--text-color-ink)] transition-colors"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+                </button>
+              </div>
+              <p className="mt-2 text-sm text-[var(--text-color-ink-400)]">
+                At least 8 characters.
+              </p>
             </div>
             <div className="flex-1">
               <label htmlFor="password2" className="text-[var(--text-color-ink)] font-semibold block mb-2 text-lg">Confirm Password</label>
-              <input 
-                type="password" 
-                id="password2" 
-                name="password2" 
-                value={password2} 
-                onChange={handleChange} 
-                required 
-                className="w-full p-3 border-2 border-[var(--border-color-line)] rounded-input focus:outline-none focus:ring-2 focus:ring-[var(--secondary-color-orchid)] focus:border-[var(--secondary-color-orchid)] bg-[var(--color-white)] text-[var(--text-color-ink)] text-base transition-all duration-200" 
-              />
+              <div className="relative">
+                <input 
+                  type={showPassword2 ? 'text' : 'password'} 
+                  id="password2" 
+                  name="password2" 
+                  value={password2} 
+                  onChange={handleChange} 
+                  required 
+                  className="w-full p-3 pr-12 border-2 border-[var(--border-color-line)] rounded-input focus:outline-none focus:ring-2 focus:ring-[var(--secondary-color-orchid)] focus:border-[var(--secondary-color-orchid)] bg-[var(--color-white)] text-[var(--text-color-ink)] text-base transition-all duration-200" 
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword2((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-color-ink-400)] hover:text-[var(--text-color-ink)] transition-colors"
+                  aria-label={showPassword2 ? 'Hide password confirmation' : 'Show password confirmation'}
+                >
+                  {showPassword2 ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+                </button>
+              </div>
+              <p className="mt-2 text-sm text-[var(--text-color-ink-400)]">
+                Passwords must match.
+              </p>
             </div>
           </div>
+          {formError && (
+            <div className="rounded-input border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {formError}
+            </div>
+          )}
           <button 
             type="submit" 
             disabled={isLoading}

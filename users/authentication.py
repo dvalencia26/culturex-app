@@ -1,5 +1,6 @@
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import AccessToken, TokenError
+from rest_framework_simplejwt.exceptions import InvalidToken
 from django.conf import settings
 from django.contrib.auth import get_user_model
 
@@ -29,6 +30,6 @@ class CookieJWTAuthentication(JWTAuthentication):
             validated_token = self.get_validated_token(raw_token)
             user = self.get_user(validated_token) # Gets user from token
             return (user, validated_token)
-        except TokenError:
+        except (TokenError, InvalidToken):
             # If token is invalid, return None (no authentication)
             return None

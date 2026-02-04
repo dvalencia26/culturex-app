@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import CountryPreviewCard from '../components/ui/CountryPreviewCard';
+import JoinCommunity from '../components/ui/JoinCommunity';
+import Footer from '../components/ui/Footer';
 //import CountryButton from '../components/ui/CountryButton';
 import postService from '../services/postService';
 import { toast } from 'sonner';
@@ -34,7 +36,7 @@ const Home = () => {
   return (
     <div className="min-h-screen bg-[var(--color-background-snow)] font-ui">
       {/* Hero Banner Section */}
-      <div className="relative h-[400px] md:h-[500px] lg:h-[600px] w-full overflow-hidden">
+      <div className="relative h-[300px] md:h-[380px] lg:h-[450px] w-full overflow-hidden">
         {/* Banner Image */}
         <img 
           src={banner} 
@@ -46,10 +48,10 @@ const Home = () => {
         
         {/* Text on top of banner */}
         <div className="relative z-10 h-full flex flex-col items-center justify-center px-4 text-center">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-[var(--color-white)] font-editorial tracking-wide mb-6 drop-shadow-lg">
+          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-[var(--color-white)] font-editorial tracking-wide mb-4 drop-shadow-lg">
             Explore Cultural Destinations
           </h1>
-          <p className="text-lg md:text-xl text-[var(--color-white)] max-w-2xl mx-auto leading-relaxed drop-shadow-md mb-8">
+          <p className="text-base md:text-lg text-[var(--color-white)] max-w-2xl mx-auto leading-relaxed drop-shadow-md mb-6">
             Connect with people and cultures from around the world
           </p>
           
@@ -65,7 +67,7 @@ const Home = () => {
               onClick={() => navigate('/threads')}
               className="px-8 py-4 bg-[var(--primary-color-royal)] text-[var(--color-white)] font-bold text-lg rounded-input shadow-card hover:bg-[var(--primary-color-royal-600)] hover:shadow-lg hover:scale-105 transition-all duration-200 ease-[var(--ease-snappy)] min-w-[200px]"
             >
-              Join Threads
+              Read Discussions
             </button>
           </div>
         </div>
@@ -106,6 +108,12 @@ const Home = () => {
           )}
         </div>
       </div>
+
+      {/* Join Community CTA */}
+      <JoinCommunity />
+
+      {/* Footer */}
+      <Footer />
     </div>
   )
 }
