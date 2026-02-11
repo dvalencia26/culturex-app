@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Profile, Post, ThreadCategory, ThreadSubcategory, Thread, ThreadReply
+from .models import User, Profile, Post, PostSummary, ThreadCategory, ThreadSubcategory, Thread, ThreadReply
 from django.contrib.auth import authenticate
 from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
@@ -385,6 +385,35 @@ class PostSerializer(serializers.ModelSerializer):
                 'author_username', 'author_full_name', 'author_profile_image',
                 'country_name', 'country_code', 'country_flag', 'city_name'
             ]
+
+
+class PostDetailSerializer(PostSerializer):
+    # Serializer for detailed post view including AI summary
+    summary_text = serializers.SerializerMethodField()
+    summary_status = serializers.SerializerMethodField()
+    summary_generated_at = serializers.SerializerMethodField()
+
+    def _get_summary_obj(self, obj):
+        try:
+            return obj.summary
+        except PostSummary.DoesNotExist:
+            return None
+
+    def get_summary_text(self, obj):
+        summary_obj = self._get_summary_obj(obj)
+        return summary_obj.summary if summary_obj and summary_obj.summary else None
+
+    def get_summary_status(self, obj):
+        summary_obj = self._get_summary_obj(obj)
+        return summary_obj.status if summary_obj else None
+
+    def get_summary_generated_at(self, obj):
+        summary_obj = self._get_summary_obj(obj)
+        return summary_obj.generated_at if summary_obj else None
+
+    class Meta(PostSerializer.Meta):
+        fields = PostSerializer.Meta.fields + ['summary_text', 'summary_status', 'summary_generated_at']
+        read_only_fields = PostSerializer.Meta.read_only_fields + ['summary_text', 'summary_status', 'summary_generated_at']
 
 
 # Thread Serializers

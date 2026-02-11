@@ -1,14 +1,16 @@
 from django.shortcuts import render
 from rest_framework.generics import GenericAPIView
 from .serializers import (LoginSerializer, UserRegisterSerializer, PasswordResetRequestSerializer, 
-                          SetNewPasswordSerializer, LogoutUserSerializer, ProfileSerializer, ProfileUpdateSerializer, PostSerializer,
+                          SetNewPasswordSerializer, LogoutUserSerializer, ProfileSerializer, ProfileUpdateSerializer, PostSerializer, PostDetailSerializer,
                           ThreadCategorySerializer, ThreadSubcategorySerializer, ThreadSerializer, ThreadReplySerializer)
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from .utils import send_code_via_email
-from .models import OneTimePassword, User, Profile, Post, ThreadCategory, ThreadSubcategory, Thread, ThreadReply
+from .models import OneTimePassword, User, Profile, Post, PostSummary, ThreadCategory, ThreadSubcategory, Thread, ThreadReply
+from .extract_text_for_ai import extract_text_from_editorjs, compute_content_hash
+from .ai_summarizer import summarize_with_gemini, SummaryGenerationError
 from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import smart_str, DjangoUnicodeDecodeError
 from django.utils import timezone
@@ -27,6 +29,9 @@ from botocore.config import Config
 import uuid # For generating unique identifiers
 import boto3
 import json
+import logging
+
+logger = logging.getLogger(__name__) # use logger to log errors and info
 
 # Custom database function for unaccent when filtering city names
 class Unaccent(models.Func):
@@ -726,7 +731,7 @@ def post_detail(request, username, slug):
     try:
         # Get the post by username and slug
         post = Post.objects.select_related(
-            'user__profile', 'primary_city',
+            'user__profile', 'primary_city', 'summary',
         ).get(user__profile__username=username, slug=slug)
         
         # Check permissions for viewing
@@ -739,7 +744,7 @@ def post_detail(request, username, slug):
         
         if request.method == 'GET':
             # GET is public for published posts, no authentication required
-            serializer = PostSerializer(post, context={'request': request})
+            serializer = PostDetailSerializer(post, context={'request': request}) #Return detailed post info with summary
             return Response(serializer.data, status=status.HTTP_200_OK)
         
         # For PUT, PATCH, DELETE - require authentication
@@ -757,6 +762,7 @@ def post_detail(request, username, slug):
         if request.method in ['PUT', 'PATCH']:
             # Update the post
             partial = request.method == 'PATCH'
+            previous_content_hash = compute_content_hash(post.content)
             serializer = PostSerializer(
                 post, 
                 data=request.data, 
@@ -765,7 +771,21 @@ def post_detail(request, username, slug):
             )
             
             if serializer.is_valid():
-                serializer.save()
+                updated_post = serializer.save()
+                current_content_hash = compute_content_hash(updated_post.content)
+
+                # If content has changed, mark summary as stale
+                if previous_content_hash != current_content_hash:
+                    try:
+                        summary_obj = updated_post.summary
+                    except PostSummary.DoesNotExist:
+                        summary_obj = None
+
+                    if summary_obj:
+                        summary_obj.status = PostSummary.Status.STALE
+                        summary_obj.error_message = ''
+                        summary_obj.save(update_fields=['status', 'error_message', 'updated_at'])
+
                 return Response(serializer.data, status=status.HTTP_200_OK)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
@@ -784,6 +804,131 @@ def post_detail(request, username, slug):
         return Response({
             'error': f'Error: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def summarize_post(request, post_id):
+    # Unique request ID for logging and tracking purposes. 
+    # This helps correlate logs and responses for this specific summary generation request.
+    request_id = request.headers.get('X-Request-ID') or str(uuid.uuid4()) 
+
+    try:
+        # Get the post by ID
+        post = Post.objects.select_related('summary').get(id=post_id)
+    except Post.DoesNotExist:
+        return Response({'error': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Only published posts can be summarized
+    if post.status != Post.Status.PUBLISHED:
+        return Response(
+            {'error': 'Only published posts can be summarized.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Extract text from EditorJS content using utility function (extract_text_for_ai.py)
+    extracted_text = extract_text_from_editorjs(post.content)
+    if not extracted_text:
+        return Response(
+            {'error': 'No summarizeable text found in this post.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Check for existing summary or create a new one
+    summary_obj, _ = PostSummary.objects.get_or_create(post=post)
+    current_content_hash = compute_content_hash(post.content) # Hash of current content
+
+    if (
+        summary_obj.status == PostSummary.Status.READY
+        and summary_obj.content_hash == current_content_hash # Content hasn't changed
+        and summary_obj.summary # Summary exists
+    ):
+        # Return cached summary
+        return Response({
+            'post_id': post.id,
+            'summary': summary_obj.summary,
+            'summary_status': summary_obj.status,
+            'generated_at': summary_obj.generated_at,
+            'model_used': summary_obj.model_name or settings.GEMINI_MODEL,
+            'source': 'cache',
+        }, status=status.HTTP_200_OK)
+
+    try:
+        # otherwise, generate a new summary using Gemini
+        summary_result = summarize_with_gemini(
+            title=post.title,
+            text=extracted_text,
+            post_id=post.id,
+            request_id=request_id,
+        )
+        generated_summary = summary_result['summary']
+        model_used = summary_result['model_used']
+    except SummaryGenerationError as exc:
+        logger.warning(
+            "Summary generation failed request_id=%s post_id=%s error_code=%s model_used=%s http_status=%s",
+            request_id,
+            post.id,
+            exc.error_code,
+            exc.model_used,
+            exc.http_status,
+        )
+
+        summary_obj.status = PostSummary.Status.FAILED
+        summary_obj.error_message = exc.backend_message[:1000]
+        summary_obj.save(update_fields=['status', 'error_message', 'updated_at'])
+
+        response_payload = {
+            'error': exc.user_message,
+            'error_code': exc.error_code,
+            'model_used': exc.model_used,
+            'request_id': request_id,
+        }
+        if exc.retry_after_seconds is not None:
+            response_payload['retry_after_seconds'] = exc.retry_after_seconds
+        if settings.DEBUG:
+            response_payload['detail'] = exc.backend_message
+            if exc.provider_error_message:
+                response_payload['provider_error_message'] = exc.provider_error_message
+
+        response_status = exc.http_status or status.HTTP_502_BAD_GATEWAY
+        return Response(response_payload, status=response_status)
+    except Exception as exc:
+        logger.exception("Gemini summary generation failed for post_id=%s request_id=%s", post.id, request_id)
+        detailed_error = str(exc).strip() or "Unknown Gemini error"
+        summary_obj.status = PostSummary.Status.FAILED
+        summary_obj.error_message = detailed_error[:1000]
+        summary_obj.save(update_fields=['status', 'error_message', 'updated_at'])
+
+        response_payload = {
+            'error': 'Unable to generate summary right now. Please try again later.',
+            'error_code': 'PROVIDER_ERROR',
+            'request_id': request_id,
+        }
+        if settings.DEBUG:
+            response_payload['detail'] = detailed_error
+        return Response(
+            response_payload,
+            status=status.HTTP_502_BAD_GATEWAY
+        )
+
+    # Save the new summary
+    summary_obj.summary = generated_summary 
+    summary_obj.content_hash = current_content_hash
+    summary_obj.status = PostSummary.Status.READY
+    summary_obj.model_name = model_used
+    summary_obj.error_message = ''
+    summary_obj.generated_at = timezone.now()
+    summary_obj.save()
+
+    return Response({
+        'post_id': post.id,
+        'summary': summary_obj.summary,
+        'summary_status': summary_obj.status,
+        'generated_at': summary_obj.generated_at,
+        'model_used': summary_obj.model_name,
+        'request_id': request_id,
+        'source': 'generated',
+    }, status=status.HTTP_200_OK)
 
 
 @api_view(['GET'])

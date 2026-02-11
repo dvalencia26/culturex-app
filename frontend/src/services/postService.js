@@ -130,12 +130,30 @@ export const postService = {
     }
   },
 
+  // Generate or fetch cached summary for a post
+  summarizePost: async (postId) => {
+    try {
+      const response = await axiosInstance.post(`/auth/posts/${postId}/summarize/`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      const payload = error.response?.data || {};
+      return {
+        success: false,
+        error: payload.error || 'Failed to summarize post',
+        errorCode: payload.error_code || null,
+        retryAfterSeconds: payload.retry_after_seconds ?? null,
+        modelUsed: payload.model_used || null,
+        requestId: payload.request_id || null,
+      };
+    }
+  },
+
   // Search posts
   searchPosts: async (searchTerm, filters = {}) => {
     try {
       const searchFilters = { ...filters, search: searchTerm };
       return await postService.getAllPosts(searchFilters);
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: 'Failed to search posts'
@@ -161,7 +179,7 @@ export const postService = {
       }
       
       return await postService.getAllPosts(filters);
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: `Failed to fetch posts for ${countryCode}`
@@ -178,7 +196,7 @@ export const postService = {
         offset: options.offset || 0,
         ...options 
       });
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: `Failed to fetch posts for city ${cityId}`
@@ -195,7 +213,7 @@ export const postService = {
         offset: options.offset || 0,
         ...options 
       });
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: 'Failed to fetch global posts'

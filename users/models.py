@@ -242,6 +242,26 @@ class Post(models.Model):
         ]
 
 
+class PostSummary(models.Model):
+    class Status(models.TextChoices):
+        STALE = "stale", "Stale"
+        READY = "ready", "Ready"
+        FAILED = "failed", "Failed"
+
+    post = models.OneToOneField(Post, on_delete=models.CASCADE, related_name='summary')
+    summary = models.TextField(blank=True, default="")
+    content_hash = models.CharField(max_length=64, blank=True, default="", db_index=True) # cost control + invalidation (if content don't change, no need to regenerate)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.STALE) # Default to stale
+    model_name = models.CharField(max_length=100, blank=True, default="")
+    error_message = models.TextField(blank=True, default="")
+    generated_at = models.DateTimeField(blank=True, null=True) # When summary was generated
+    created_at = models.DateTimeField(auto_now_add=True) 
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Summary for post {self.post_id} ({self.status})"
+
+
 '''
 Threads/Discussion models 
 '''

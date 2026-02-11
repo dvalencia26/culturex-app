@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import Breadcrumbs from '../../components/ui/Breadcrumbs';
 import BlockRenderer from '../../components/PostForm/BlogEditor/BlockRenderer';
@@ -27,12 +27,15 @@ import { MapPin, Flag, Globe, FileText, ChevronLeft, Edit, Trash2 } from 'lucide
 const PostPage = () => {
   const { username, slug } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthor, setIsAuthor] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [summaryError, setSummaryError] = useState('');
 
   // Load post data
   useEffect(() => {
@@ -50,6 +53,7 @@ const PostPage = () => {
     if (!username || !slug) return;
     
     setLoading(true);
+    setSummaryError('');
     
     try {
       const response = await postService.getPost(username, slug);
@@ -67,6 +71,63 @@ const PostPage = () => {
       setTimeout(() => navigate('/'), 2000);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSummarize = async () => {
+    if (!post?.id) return;
+
+    if (!user) {
+      const returnPath = `${location.pathname}${location.search}`;
+      navigate('/login', { state: { from: returnPath } });
+      return;
+    }
+
+    setIsSummarizing(true);
+    setSummaryError('');
+
+    try {
+      const response = await postService.summarizePost(post.id);
+
+      if (!response.success) {
+        const errorText = (() => {
+          if (response.errorCode === 'RATE_LIMIT_RPM_EXCEEDED') {
+            return 'Summaries are temporarily busy. Please try again in a minute.';
+          }
+          if (response.errorCode === 'RATE_LIMIT_RPD_EXCEEDED') {
+            return "Summary unavailable for today. Try again tomorrow.";
+          }
+          if (response.errorCode === 'RATE_LIMIT_UNKNOWN') {
+            return 'Oops something went wrong. We will fix this soon. Please try again later.';
+          }
+          if (response.errorCode === 'INCOMPLETE_OUTPUT') {
+            return 'Summary output was incomplete. Please try again.';
+          }
+          return response.error || 'Failed to summarize post';
+        })();
+        setSummaryError(errorText);
+        toast.error(errorText);
+        return;
+      }
+
+      setPost((prevPost) => ({
+        ...prevPost,
+        summary_text: response.data.summary || null,
+        summary_status: response.data.summary_status || null,
+        summary_generated_at: response.data.generated_at || null,
+        summary_model_used: response.data.model_used || null,
+      }));
+
+      if (response.data.source === 'cache') {
+        toast.success('Loaded saved summary');
+      } else {
+        toast.success('Summary generated');
+      }
+    } catch {
+      setSummaryError('Failed to summarize post');
+      toast.error('Failed to summarize post');
+    } finally {
+      setIsSummarizing(false);
     }
   };
 
@@ -97,6 +158,51 @@ const PostPage = () => {
     } finally {
       setDeleting(false);
     }
+  };
+
+  // Render summary text with formatting (bold, lists) for better display in the summary box
+  const renderSummaryText = (rawText) => {
+    if (!rawText) return null;
+
+    const normalized = rawText
+      .replace(/\r\n/g, '\n')
+      .replace(/^\*\s+/gm, '• ')
+      .replace(/\n\*\s+/g, '\n• ')
+      .replace(/\s\*\s(?=\*\*)/g, '\n• ')
+      .trim();
+
+    const lines = normalized
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const renderBoldInline = (line, lineIndex) => {
+      const segments = line.split(/(\*\*.+?\*\*)/g).filter(Boolean);
+      return segments.map((segment, segmentIndex) => {
+        const boldMatch = segment.match(/^\*\*(.+)\*\*$/);
+        if (boldMatch) {
+          return (
+            <strong key={`summary-bold-${lineIndex}-${segmentIndex}`} className="font-semibold">
+              {boldMatch[1]}
+            </strong>
+          );
+        }
+        return (
+          <span key={`summary-text-${lineIndex}-${segmentIndex}`}>
+            {segment}
+          </span>
+        );
+      });
+    };
+
+    return lines.map((line, lineIndex) => (
+      <p
+        key={`summary-line-${lineIndex}`}
+        className={lineIndex === 0 ? '' : 'mt-2'}
+      >
+        {renderBoldInline(line, lineIndex)}
+      </p>
+    ));
   };
 
   // Get location badge
@@ -174,6 +280,17 @@ const PostPage = () => {
       </div>
     );
   }
+
+  const hasSummary = Boolean(post.summary_text);
+  const isSummaryStale = post.summary_status === 'stale';
+  const shouldShowSummarizeButton = !hasSummary || isSummaryStale;
+
+  const summarizeButtonLabel = (() => {
+    if (!user) return 'Log in to Summarize';
+    if (isSummarizing) return isSummaryStale ? 'Creating New Summary...' : 'Summarizing...';
+    if (isSummaryStale) return 'Create New Summary';
+    return 'Summarize this post';
+  })();
 
   return (
     <div className="min-h-screen bg-[var(--color-background-snow)] font-ui">
@@ -257,10 +374,50 @@ const PostPage = () => {
                   </div>
                 )}
               </div>
+
+              {post.status === 'published' && (
+                <div className="mt-6 flex flex-col gap-2">
+                  {shouldShowSummarizeButton && (
+                    <div className="flex flex-col gap-2">
+                       {isSummaryStale && (
+                        <p className="text-sm text-[var(--text-color-ink-400)]">
+                          Create new summary, the contents of this post have been edited.
+                        </p>
+                      )}
+                      <button
+                        onClick={handleSummarize}
+                        disabled={isSummarizing}
+                        className="w-fit px-4 py-2 bg-[var(--secondary-color-orchid)] text-[var(--color-white)] border border-[var(--secondary-color-orchid-700)] rounded-input font-semibold hover:bg-[var(--secondary-color-orchid-600)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {summarizeButtonLabel}
+                      </button>
+                     
+                    </div>
+                  )}
+                  {summaryError && (
+                    <p className="text-sm text-red-600">{summaryError}</p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Post Content Section */}
             <div className="p-8">
+              {post.summary_text && (
+                <div className="mb-8 rounded-card border border-[var(--border-color-line)] bg-[var(--color-background-snow)] p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <h2 className="text-lg font-bold text-[var(--text-color-ink)]">AI Summary</h2>
+                    {post.summary_generated_at && (
+                      <span className="text-xs text-[var(--text-color-ink-400)]">
+                        Updated {dayjs(post.summary_generated_at).format('MMM D, YYYY h:mm A')}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-3 text-[var(--text-color-ink)] leading-relaxed">
+                    {renderSummaryText(post.summary_text)}
+                  </div>
+                </div>
+              )}
               <div className="prose prose-lg max-w-none">
                 {isEditorJsContent(post.content) ? (
                   <BlockRenderer content={post.content} />

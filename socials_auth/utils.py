@@ -1,7 +1,6 @@
 from google.auth.transport import requests
 from google.oauth2 import id_token
-from users.models import User
-from django.contrib.auth import authenticate
+from users.models import User, Profile
 from django.conf import settings
 from rest_framework.exceptions import AuthenticationFailed
 
@@ -17,9 +16,12 @@ class Google():
             return "Token is not valid or has expired"
 
 
-# Login user with email and password
-def login_social_user(email, password):
-    user = authenticate(email=email, password=password)
+# Build auth response for an already-verified social user
+def login_social_user(user):
+    if not user:
+        raise AuthenticationFailed(detail="Google authentication failed.")
+    if not user.is_active:
+        raise AuthenticationFailed(detail="This account is inactive. Please contact support.")
     user_tokens = user.token()  
     return {
         'email': user.email,
@@ -32,12 +34,17 @@ def login_social_user(email, password):
 def register_social_user(provider, email, first_name, last_name):
     register_user = User.objects.filter(email=email)  # Check if user exists in our database
     if register_user.exists():
-        if provider == register_user[0].auth_provider:  # Check if the auth provider matches with the user's auth provider from our users model
-            result = login_social_user(email=email, password=settings.SOCIAL_AUTH_PASSWORD)
+        existing_user = register_user[0]
+        if provider == existing_user.auth_provider:  # Check if the auth provider matches with the user's auth provider from our users model
+            if not existing_user.is_verified:
+                existing_user.is_verified = True
+                existing_user.save(update_fields=['is_verified'])
+            Profile.objects.get_or_create(user=existing_user)
+            result = login_social_user(existing_user)
             return result
         else:
             raise AuthenticationFailed(
-                detail=f"Please continue your login with {register_user[0].auth_provider}."
+                detail=f"Please continue your login with {existing_user.auth_provider}."
             )
     else:
         new_user = {
@@ -50,6 +57,7 @@ def register_social_user(provider, email, first_name, last_name):
         register_user = User.objects.create_user(**new_user)
         register_user.auth_provider = provider
         register_user.is_verified = True
-        register_user.save()
-        result = login_social_user(email=register_user.email, password=settings.SOCIAL_AUTH_PASSWORD)
+        register_user.save(update_fields=['auth_provider', 'is_verified'])
+        Profile.objects.get_or_create(user=register_user)
+        result = login_social_user(register_user)
         return result
