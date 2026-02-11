@@ -18,8 +18,28 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import JsonResponse
+from django.db import connection
+
+
+def health_check(request):
+    """Health check endpoint for production monitoring."""
+    try:
+        # Check database connection
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        db_status = "healthy"
+    except Exception as e:
+        db_status = f"unhealthy: {str(e)}"
+    
+    return JsonResponse({
+        "status": "ok",
+        "database": db_status,
+    })
+
 
 urlpatterns = [
+    path('health/', health_check, name='health_check'),
     path('admin/', admin.site.urls),
     path('api/v1/auth/', include('users.urls')),  # Include URLs from the users app
     path('api/v1/auth/', include('socials_auth.urls')),  # Include URLs from the socials_auth app

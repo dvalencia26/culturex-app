@@ -14,6 +14,7 @@ from os import access
 from pathlib import Path
 import environ
 from datetime import timedelta
+import dj_database_url
 
 env = environ.Env(
     # set casting, default values
@@ -35,7 +36,7 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
 
 
 # Application definition
@@ -99,14 +100,14 @@ TEMPLATES = [
 WSGI_APPLICATION = 'backend.wsgi.application'
 
 # CORS settings
-CORS_ALLOWED_ORIGINS = [
+CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[
     "http://localhost:3000", # React frontend
     "http://localhost:5173", # Vite frontend
-]
-CSRF_TRUSTED_ORIGINS = [
+])
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[
     "http://localhost:3000", # React frontend
     "http://localhost:5173", # Vite frontend
-]
+])
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -177,23 +178,36 @@ STORAGES = {
 # CSRF settings for API
 CSRF_COOKIE_NAME = 'csrftoken'
 CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript access for SPA
-CSRF_COOKIE_SECURE = False  # Set to True in production with HTTPS
-CSRF_COOKIE_SAMESITE = 'Lax' # Whether the cookie should be sent with cross-site requests (Lax, Strict, None)
+CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=False)  # Set to True in production with HTTPS
+CSRF_COOKIE_SAMESITE = env('CSRF_COOKIE_SAMESITE', default='Lax') # Whether the cookie should be sent with cross-site requests (Lax, Strict, None)
 CSRF_USE_SESSIONS = False
 CSRF_COOKIE_DOMAIN = None
+
+# Session cookie settings (for Django admin and CSRF)
+SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=False)  # Set to True in production with HTTPS
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'travel-app-db',
-        'USER': 'postgres',
-        'PASSWORD': '032004',
-        'HOST': 'localhost',
-        'PORT': '5432',
+# Production database
+if env('DATABASE_URL', default=None):
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=env('DATABASE_URL'),
+            conn_max_age=600,
+        )
     }
+else:
+    # Local development database settings
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': 'travel-app-db',
+            'USER': 'postgres',
+            'PASSWORD': '032004',
+            'HOST': 'localhost',
+            'PORT': '5432',
+        }
 }
 
 AUTH_USER_MODEL = 'users.User'
@@ -208,9 +222,9 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',), # The type of the auth header
     'AUTH_COOKIE': 'access_token', # Cookie name. Enables cookies if value is set.
     'AUTH_COOKIE_REFRESH': 'refresh_token', # The refresh token cookie name.
-    'AUTH_COOKIE_SECURE': False,  # Set to True in production with HTTPS
+    'AUTH_COOKIE_SECURE': env.bool('AUTH_COOKIE_SECURE', default=False),  # Set to True in production with HTTPS
     'AUTH_COOKIE_HTTP_ONLY': True, # HTTP only cookies are not accessible to JavaScript. 
-    'AUTH_COOKIE_SAMESITE': 'Lax', # Lax is the default and allows the cookie to be sent with cross-site requests.
+    'AUTH_COOKIE_SAMESITE': env('AUTH_COOKIE_SAMESITE', default='Lax'), # Lax is the default and allows the cookie to be sent with cross-site requests.
     'AUTH_COOKIE_PATH': '/', # The path of the auth cookie
     'AUTH_COOKIE_DOMAIN': None, # A specific domain to set the cookie on (None means any domain)
 }
