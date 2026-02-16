@@ -19,7 +19,7 @@ import axios from 'axios';
 
 // Axios instance for the backend API with CSRF protection and single token refresh attempt
 // This is used to make requests to the backend API. 
-const baseURL = 'http://localhost:8000/api/v1';
+const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 const axiosInstance = axios.create({
   baseURL,
   headers: { 'Content-Type': 'application/json' }, // Set the content type to JSON
