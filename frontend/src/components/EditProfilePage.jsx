@@ -5,6 +5,7 @@ import { Camera, ChevronLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { userService } from '../services/userService';
 import Breadcrumbs from './ui/Breadcrumbs';
+import ProfileCropModal from './ProfileCropModal';
 
 const uploadToSpaces = async (presignedData, file) => {
   const formData = new FormData();
@@ -34,9 +35,9 @@ const EditProfilePage = () => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false);
+  const [croppedBlob, setCroppedBlob] = useState(null);
   const [profileImagePreview, setProfileImagePreview] = useState('');
-  const [profileImageKey, setProfileImageKey] = useState('');
+  const [cropModalSrc, setCropModalSrc] = useState('');
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -78,12 +79,20 @@ const EditProfilePage = () => {
     loadProfile();
   }, [user?.username]);
 
+  // Clean up object URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (profileImagePreview) URL.revokeObjectURL(profileImagePreview);
+      if (cropModalSrc) URL.revokeObjectURL(cropModalSrc);
+    };
+  }, []);
+
   const handleChange = (event) => {
     const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleImageChange = async (event) => {
+  const handleImageChange = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -92,25 +101,29 @@ const EditProfilePage = () => {
       return;
     }
 
-    setUploadingImage(true);
-    const presignResult = await userService.presignProfileImageUpload(file.type);
-
-    if (!presignResult.success) {
-      toast.error(presignResult.error || 'Failed to prepare upload');
-      setUploadingImage(false);
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Please select a JPG, PNG, or WEBP image');
       return;
     }
 
-    const uploadSuccess = await uploadToSpaces(presignResult.data.upload, file);
-    if (!uploadSuccess) {
-      toast.error('Upload failed. Please try again.');
-      setUploadingImage(false);
-      return;
-    }
+    if (cropModalSrc) URL.revokeObjectURL(cropModalSrc);
 
-    setProfileImagePreview(presignResult.data.url);
-    setProfileImageKey(presignResult.data.name);
-    setUploadingImage(false);
+    setCropModalSrc(URL.createObjectURL(file));
+    event.target.value = '';
+  };
+
+  const handleCropConfirm = (blob) => {
+    if (profileImagePreview) URL.revokeObjectURL(profileImagePreview);
+    setCroppedBlob(blob);
+    setProfileImagePreview(URL.createObjectURL(blob));
+    URL.revokeObjectURL(cropModalSrc);
+    setCropModalSrc('');
+  };
+
+  const handleCropCancel = () => {
+    URL.revokeObjectURL(cropModalSrc);
+    setCropModalSrc('');
   };
 
   const handleCancel = () => {
@@ -130,42 +143,65 @@ const EditProfilePage = () => {
       return;
     }
 
-    if (uploadingImage) {
-      toast.error('Please wait for the image upload to finish');
-      return;
-    }
-
     if (!formData.username.trim()) {
       toast.error('Username is required');
       return;
     }
 
     setSaving(true);
-    const payload = {
-      username: formData.username.trim(),
-      first_name: formData.first_name.trim(),
-      last_name: formData.last_name.trim(),
-      bio: formData.bio,
-      facebook_url: formData.facebook_url,
-      instagram_url: formData.instagram_url,
-      twitter_url: formData.twitter_url,
-      tiktok_url: formData.tiktok_url,
-    };
 
-    if (profileImageKey) {
-      payload.profile_image_key = profileImageKey;
-    }
+    try {
+      let imageKey = null;
 
-    const result = await userService.updateProfile(user.username, payload);
-    if (result.success) {
-      toast.success('Profile updated successfully');
-      setProfile(result.data);
-      await refreshAuthState();
-      navigate(`/profile/${result.data.username}`);
-    } else {
-      toast.error(result.error || 'Failed to update profile');
+      if (croppedBlob) {
+        const presignResult = await userService.presignProfileImageUpload('image/jpeg');
+        if (!presignResult.success) {
+          toast.error(presignResult.error || 'Failed to prepare image upload');
+          setSaving(false);
+          return;
+        }
+
+        const uploadSuccess = await uploadToSpaces(presignResult.data.upload, croppedBlob);
+        if (!uploadSuccess) {
+          toast.error('Image upload failed. Please try again.');
+          setSaving(false);
+          return;
+        }
+
+        imageKey = presignResult.data.name;
+      }
+
+      const payload = {
+        username: formData.username.trim(),
+        first_name: formData.first_name.trim(),
+        last_name: formData.last_name.trim(),
+        bio: formData.bio,
+        facebook_url: formData.facebook_url,
+        instagram_url: formData.instagram_url,
+        twitter_url: formData.twitter_url,
+        tiktok_url: formData.tiktok_url,
+      };
+
+      if (imageKey) {
+        payload.profile_image_key = imageKey;
+      }
+
+      const result = await userService.updateProfile(user.username, payload);
+      if (result.success) {
+        toast.success('Profile updated successfully');
+        setProfile(result.data);
+        setCroppedBlob(null);
+        await refreshAuthState();
+        navigate(`/profile/${result.data.username}`);
+      } else {
+        toast.error(result.error || 'Failed to update profile');
+      }
+    } catch (err) {
+      console.error('Submit error:', err);
+      toast.error('Something went wrong. Please try again.');
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const inputClassName = 'w-full p-3 border-2 border-[var(--border-color-line)] rounded-input focus:outline-none focus:ring-2 focus:ring-[var(--primary-color-royal)] focus:border-[var(--primary-color-royal)] bg-[var(--color-white)] text-[var(--text-color-ink)] text-base transition-all duration-200';
@@ -247,14 +283,14 @@ const EditProfilePage = () => {
                     id="profile_image"
                     name="profile_image"
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/webp"
                     className="hidden"
                     onChange={handleImageChange}
                   />
                 </div>
                 <div className="text-center">
                   <p className="text-sm text-[var(--text-color-ink-400)]">
-                    {uploadingImage ? 'Uploading image...' : 'JPG, PNG, or WEBP up to 10MB'}
+                    JPG, PNG, or WEBP up to 10MB
                   </p>
                 </div>
               </div>
@@ -383,7 +419,7 @@ const EditProfilePage = () => {
                     disabled={saving}
                     className="w-full sm:w-auto px-6 py-3 bg-[var(--primary-color-royal)] text-white rounded-input font-semibold hover:bg-[var(--primary-color-royal-600)] transition-colors disabled:opacity-60"
                   >
-                    {saving ? 'Saving...' : 'Save Changes'}
+                    {saving ? (croppedBlob ? 'Uploading & Saving...' : 'Saving...') : 'Save Changes'}
                   </button>
                   <button
                     type="button"
@@ -396,6 +432,14 @@ const EditProfilePage = () => {
               </div>
             </form>
           </div>
+
+          {cropModalSrc && (
+            <ProfileCropModal
+              imageSrc={cropModalSrc}
+              onConfirm={handleCropConfirm}
+              onCancel={handleCropCancel}
+            />
+          )}
         </div>
       </div>
     </div>

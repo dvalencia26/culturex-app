@@ -1,6 +1,7 @@
 import Header from "@editorjs/header";
 import ImageTool from "@editorjs/image";
 import List from "@editorjs/list";
+import ImageSizeTune from './ImageSizeTune';
 import { uploadImage } from './imageUpload';
 
 
@@ -37,7 +38,8 @@ export const EDITOR_JS_TOOLS = {
         uploadByUrl,
       },
       captionPlaceholder: 'Add a caption (optional)',
-    }
+    },
+    tunes: ['imageSize'],
   },
   
   list: {
@@ -46,5 +48,9 @@ export const EDITOR_JS_TOOLS = {
     config: {
       defaultStyle: 'unordered'
     }
-  }
+  },
+
+  imageSize: {
+    class: ImageSizeTune,
+  },
 };

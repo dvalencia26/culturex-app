@@ -29,7 +29,7 @@ const Block = ({ block }) => {
     case 'header':
       return <HeaderBlock data={block.data} />;
     case 'image':
-      return <ImageBlock data={block.data} />;
+      return <ImageBlock data={block.data} tunes={block.tunes} />;
     case 'list':
       return <ListBlock data={block.data} />;
     default:
@@ -72,28 +72,37 @@ const HeaderBlock = ({ data }) => {
 };
 
 // Image Block
-const ImageBlock = ({ data }) => {
+const IMAGE_SIZE_CLASSES = {
+  small: 'max-w-[33%]',
+  medium: 'max-w-[66%]',
+  full: 'w-full',
+};
+
+const ImageBlock = ({ data, tunes }) => {
   const url = data.file?.url;
   if (!url) return null;
-  
+
   const caption = data.caption;
-  
+  const size = tunes?.imageSize?.size || 'full';
+
   // Build container classes based on settings
   let containerClasses = 'my-6';
+  if (size !== 'full') containerClasses += ' mx-auto';
+  containerClasses += ` ${IMAGE_SIZE_CLASSES[size] || IMAGE_SIZE_CLASSES.full}`;
   if (data.withBorder) containerClasses += ' border border-[var(--border-color-line)] rounded-lg overflow-hidden';
   if (data.withBackground) containerClasses += ' bg-[var(--color-background-snow)] p-4';
   if (data.stretched) containerClasses += ' -mx-4 md:-mx-8';
-  
+
   return (
     <figure className={containerClasses}>
-      <img 
-        src={url} 
-        alt={caption || 'Post image'} 
+      <img
+        src={url}
+        alt={caption || 'Post image'}
         className="w-full h-auto rounded-lg"
         loading="lazy"
       />
       {caption && (
-        <figcaption 
+        <figcaption
           className="text-center text-sm text-[var(--text-color-ink-400)] mt-2 italic"
           dangerouslySetInnerHTML={{ __html: caption }}
         />
