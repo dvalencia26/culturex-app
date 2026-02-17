@@ -6,7 +6,7 @@ import SearchBar from '../../components/ui/SearchBar';
 import postService from '../../services/postService';
 import { toast } from 'sonner';
 import PostCard from './PostCard';
-import { Globe, SortDesc, SortAsc } from 'lucide-react';
+import { Globe, SortDesc, SortAsc, MapPin, ArrowRight } from 'lucide-react';
 
 /**
  * GlobalPage Component:
@@ -150,16 +150,35 @@ const GlobalPage = () => {
           </div>
 
           {/* Header */}
-          <div className="text-center mb-8">
+          <div className="text-center mb-5">
             <div className="flex items-center justify-center space-x-4 mb-4">
               <Globe className="w-12 h-12 text-[var(--primary-color-royal)]" />
               <h1 className="text-4xl font-bold text-[var(--text-color-ink)] font-editorial">
                 Travel Blogs 
               </h1>
             </div>
-            <p className="text-lg text-[var(--text-color-ink-400)] max-w-2xl mx-auto">
-              Stories, experiences, and universal insights for every traveler
-            </p>
+          </div>
+
+          {/* Explore Countries Section */}
+          <div className="mt-12 mb-5 bg-[var(--color-ivory)] rounded-card p-8 md:p-10">
+            <div className="flex flex-col md:flex-row items-center gap-6 md:gap-10">
+              <div className="flex-shrink-0">
+                <div className="w-14 h-14 rounded-full bg-[var(--primary-color-royal)]/10 flex items-center justify-center">
+                  <MapPin className="w-7 h-7 text-[var(--primary-color-royal)]" />
+                </div>
+              </div>
+              <div className="flex-1 text-center md:text-left">
+                <h3 className="text-xl md:text-2xl font-bold text-[var(--primary-color-royal)] font-editorial mb-2">
+                  Looking for Specific Destinations?
+                </h3>
+              </div>
+              <button
+                onClick={() => navigate('/countries')}
+                className="flex-shrink-0 flex items-center gap-2 px-6 py-3 bg-[var(--primary-color-royal)] text-white font-bold rounded-input shadow-card hover:bg-[var(--primary-color-royal-600)] hover:shadow-lg transition-all duration-200"
+              >
+                Explore by Countries <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Search and Sort Controls */}

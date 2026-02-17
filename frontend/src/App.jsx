@@ -20,6 +20,7 @@ import EditThreadPage from './pages/ThreadPages/EditThreadPage'
 import ThreadPage from './pages/ThreadPages/ThreadPage'
 import CreatePostPage from './pages/PostPages/CreatePostPage'
 import CreateThreadPage from './pages/ThreadPages/CreateThreadPage'
+import UserSearchPage from './pages/UserSearchPage'
 
 function App() {
   return (
@@ -70,6 +71,9 @@ function App() {
               <EditThreadPage />
             </ProtectedRoute>
           } />
+          
+          {/* User Search */}
+          <Route path="/people" element={<UserSearchPage />} />
           
           {/* Individual Post Page (Public) */}
           <Route path="/u/:username/posts/:slug" element={<PostPage />} />

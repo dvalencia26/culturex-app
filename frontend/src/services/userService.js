@@ -60,6 +60,21 @@ export const userService = {
     }
   },
 
+  // Search users by name or username
+  searchUsers: async (query, limit = 20, offset = 0) => {
+    try {
+      const response = await axiosInstance.get('/auth/users/search/', {
+        params: { q: query, limit, offset }
+      });
+      return { success: true, data: response.data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Failed to search users',
+      };
+    }
+  },
+
 };
 
 export default userService;

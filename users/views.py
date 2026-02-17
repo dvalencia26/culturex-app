@@ -2,7 +2,7 @@ from django.shortcuts import render
 from rest_framework.generics import GenericAPIView
 from .serializers import (LoginSerializer, UserRegisterSerializer, PasswordResetRequestSerializer, 
                           SetNewPasswordSerializer, LogoutUserSerializer, ProfileSerializer, ProfileUpdateSerializer, PostSerializer, PostDetailSerializer,
-                          ThreadCategorySerializer, ThreadSubcategorySerializer, ThreadSerializer, ThreadReplySerializer)
+                          ThreadCategorySerializer, ThreadSubcategorySerializer, ThreadSerializer, ThreadReplySerializer, UserSearchSerializer)
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -1620,3 +1620,75 @@ def presign_profile_upload(request):
     if error_response:
         return error_response
     return Response(payload)
+
+
+@api_view(['GET'])
+def search_users(request):
+    """
+    Search users by name or username.
+    Query params:
+        - q: Search query (searches first_name, last_name, and profile username)
+        - limit: Number of results per page (default: 20, max: 50)
+        - offset: Pagination offset (default: 0)
+    Returns:
+        - users: List of user data (id, username, full_name, profile_image, bio, social links)
+        - total_count: Total matching users
+        - has_more: Whether more results are available
+    """
+    try:
+        # Get query parameters
+        query = request.GET.get('q', '').strip()
+        limit = min(int(request.GET.get('limit', 20)), 50)  # Max 50 per request
+        offset = int(request.GET.get('offset', 0))
+        
+        # Base queryset - only verified users with profiles
+        users = User.objects.filter(
+            is_verified=True
+        ).select_related('profile').exclude(
+            profile__isnull=True
+        )
+        
+        # Apply search filter if query provided
+        if query:
+            users = users.filter(
+                models.Q(first_name__icontains=query) |
+                models.Q(last_name__icontains=query) |
+                models.Q(profile__username__icontains=query)
+            )
+            # Order by relevance: exact username match first, then by name
+            users = users.order_by(
+                models.Case(
+                    models.When(profile__username__iexact=query, then=0),
+                    models.When(first_name__iexact=query, then=1),
+                    models.When(last_name__iexact=query, then=2),
+                    default=3,
+                    output_field=models.IntegerField()
+                ),
+                'first_name',
+                'last_name'
+            )
+        else:
+            # If no query, return latest users ordered by date joined
+            users = users.order_by('-date_joined')
+        
+        # Get total count before pagination
+        total_count = users.count()
+        
+        # Apply pagination
+        users = users[offset:offset + limit]
+        
+        # Serialize results
+        serializer = UserSearchSerializer(users, many=True, context={'request': request})
+        
+        return Response({
+            'users': serializer.data,
+            'total_count': total_count,
+            'has_more': (offset + limit) < total_count,
+            'query': query
+        }, status=status.HTTP_200_OK)
+        
+    except ValueError:
+        return Response({'error': 'Invalid limit or offset parameter'}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        logger.error(f"User search error: {str(e)}")
+        return Response({'error': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

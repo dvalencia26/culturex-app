@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { ChevronDown, SquarePen, MessageSquare, Menu, X } from 'lucide-react';
+import logo from '../../assets/navbarlogo.webp';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -40,7 +41,7 @@ const Navbar = () => {
           {/* Logo/Brand */}
           <div className="flex items-center">
             <Link to="/" className="text-2xl font-bold text-[var(--primary-color-royal)] hover:text-[var(--primary-color-royal-600)] transition-all duration-200 ease-[var(--ease-snappy)] font-editorial">
-              CultureX
+              <img src={logo} alt="Our Routes Logo" className="h-8 sm:h-10 md:h-16 lg:h-20 w-auto" />
             </Link>
           </div>
 

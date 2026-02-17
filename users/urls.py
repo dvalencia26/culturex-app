@@ -11,7 +11,7 @@ from .views import (
     thread_category_list, thread_category_detail, thread_subcategory_list,
     thread_list_create, get_user_threads, thread_detail, get_my_threads,
     thread_reply_list_create, thread_reply_detail, get_nested_replies,
-    popular_countries, get_all_countries,
+    popular_countries, get_all_countries, search_users,
 )
 
 urlpatterns = [
@@ -42,6 +42,7 @@ urlpatterns = [
     path('profile/<str:handle>/', get_user_profile_data, name='user-profile'),  # Get user profile data
     path('profile/<str:handle>/update/', ProfileUpdateView.as_view(), name='profile-update'),
     path('toggle-follow/<str:handle>/', toggleFollow, name='toggle-follow'),  # Toggle follow/unfollow user
+    path('users/search/', search_users, name='user-search'),  # Search users by name or username
 
     # Posts
     path('posts/', post_list_create, name='post-list-create'),  # GET: List posts, POST: Create post

@@ -562,3 +562,33 @@ class ThreadSerializer(serializers.ModelSerializer):
             'category_name', 'category_slug', 'subcategory_name', 'subcategory_slug',
             'country_name', 'country_code', 'country_flag'
         ]
+
+
+class UserSearchSerializer(serializers.ModelSerializer):
+    """Serializer for user search results & profile data for user cards"""
+    username = serializers.CharField(source='profile.username', read_only=True)
+    full_name = serializers.CharField(source='get_full_name', read_only=True)
+    profile_image = serializers.SerializerMethodField()
+    bio = serializers.CharField(source='profile.bio', read_only=True)
+    instagram_url = serializers.CharField(source='profile.instagram_url', read_only=True)
+    twitter_url = serializers.CharField(source='profile.twitter_url', read_only=True)
+    facebook_url = serializers.CharField(source='profile.facebook_url', read_only=True)
+    tiktok_url = serializers.CharField(source='profile.tiktok_url', read_only=True)
+    is_verified = serializers.BooleanField(read_only=True)
+    
+    def get_profile_image(self, obj):
+        """Get full URL for profile image"""
+        request = self.context.get('request')
+        if hasattr(obj, 'profile') and obj.profile.profile_image:
+            if request:
+                return request.build_absolute_uri(obj.profile.profile_image.url)
+            return obj.profile.profile_image.url
+        return None
+    
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'full_name', 'profile_image', 'bio',
+            'instagram_url', 'twitter_url', 'facebook_url', 'tiktok_url',
+            'is_verified'
+        ]

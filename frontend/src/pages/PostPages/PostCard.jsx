@@ -13,9 +13,10 @@ import { MapPin, Flag, Globe, ChevronRight, Image as ImageIcon } from 'lucide-re
  * Props:
  * - post: Post object with all fields from PostSerializer
  * - showLocationBadge: boolean (default: true) - Show location badge
+ * - showContentPreview: boolean (default: true) - Show text preview
  */
 
-const PostCard = ({ post, showLocationBadge = true }) => {
+const PostCard = ({ post, showLocationBadge = true, showContentPreview = true }) => {
   const navigate = useNavigate();
 
   const handleReadMore = () => {
@@ -107,12 +108,14 @@ const PostCard = ({ post, showLocationBadge = true }) => {
           </div>
         )}
         
-        <h2 className="text-xl font-bold text-[var(--text-color-ink)] mb-3 font-editorial hover:text-[var(--primary-color-royal)] transition-colors">
+        <h2 className={`text-xl font-bold text-[var(--text-color-ink)] font-editorial hover:text-[var(--primary-color-royal)] transition-colors ${showContentPreview ? 'mb-3' : 'mb-0'}`}>
           {post.title}
         </h2>
-        <p className="text-[var(--text-color-ink-400)] leading-relaxed mb-4 line-clamp-3">
-          {contentPreview || 'No content preview available'}
-        </p>
+        {showContentPreview && (
+          <p className="text-[var(--text-color-ink-400)] leading-relaxed mb-4 line-clamp-3">
+            {contentPreview || 'No content preview available'}
+          </p>
+        )}
       </div>
 
       {/* Post Actions */}
