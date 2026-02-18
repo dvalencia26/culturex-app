@@ -37,7 +37,7 @@ const EditPostPage = () => {
       // Redirect if not the author
       if (!authorCheck) {
         toast.error('Sorry. You do not have permission to edit this post');
-        navigate(`/profile/${username}/posts/${slug}`);
+        navigate(`/u/${username}/posts/${slug}`);
       }
     }
   }, [user, post, username, slug, navigate]);
@@ -73,7 +73,7 @@ const EditPostPage = () => {
   };
 
   const handleCancel = () => {
-    navigate(`/profile/${username}/posts/${slug}`);
+    navigate(`/u/${username}/posts/${slug}`);
   };
 
   if (loading) {

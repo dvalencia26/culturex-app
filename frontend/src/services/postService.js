@@ -278,11 +278,11 @@ export const postService = {
     }
   },
 
-  // Get cities for a specific country 
+  // Get cities for a specific country
   getCitiesByCountry: async (countryCode, options = {}) => {
     try {
       const params = new URLSearchParams();
-      
+
       // Add all supported parameters
       if (options.search) params.append('search', options.search);
       if (options.limit) params.append('limit', options.limit);
@@ -290,11 +290,93 @@ export const postService = {
 
       const queryString = params.toString();
       const url = `/auth/countries/${countryCode}/cities/${queryString ? '?' + queryString : ''}`;
-      
+
       const response = await axiosInstance.get(url);
-      return response.data; // Return data 
+      return response.data; // Return data
     } catch (error) {
       throw new Error(error.response?.data?.error || 'Failed to fetch cities');
+    }
+  },
+
+  // RECOMMENDATION METHODS
+  // Get all recommendation categories
+  getRecommendationCategories: async () => {
+    try {
+      const response = await axiosInstance.get('/auth/recommendation-categories/');
+      return { success: true, data: response.data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Failed to fetch recommendation categories'
+      };
+    }
+  },
+
+  // Get all recommendations for a post
+  getPostRecommendations: async (postId) => {
+    try {
+      const response = await axiosInstance.get(`/auth/posts/${postId}/recommendations/`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Failed to fetch recommendations'
+      };
+    }
+  },
+
+  // Create a single recommendation for a post
+  createRecommendation: async (postId, recommendationData) => {
+    try {
+      const response = await axiosInstance.post(`/auth/posts/${postId}/recommendations/`, recommendationData);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data || 'Failed to create recommendation'
+      };
+    }
+  },
+
+  // Bulk create recommendations for a post
+  bulkCreateRecommendations: async (postId, recommendations) => {
+    try {
+      const response = await axiosInstance.post(
+        `/auth/posts/${postId}/recommendations/bulk/`,
+        { recommendations }
+      );
+      return { success: true, data: response.data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Failed to create recommendations'
+      };
+    }
+  },
+
+  // Update a recommendation
+  updateRecommendation: async (recommendationId, data) => {
+    try {
+      const response = await axiosInstance.put(`/auth/recommendations/${recommendationId}/`, data);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data || 'Failed to update recommendation'
+      };
+    }
+  },
+
+  // Delete a recommendation
+  deleteRecommendation: async (recommendationId) => {
+    try {
+      const response = await axiosInstance.delete(`/auth/recommendations/${recommendationId}/`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Failed to delete recommendation'
+      };
     }
   }
 };

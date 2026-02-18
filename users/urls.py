@@ -2,11 +2,13 @@ from django.urls import path
 from django.conf import settings
 from django.conf.urls.static import static
 from .views import (
-    RegisterUserView, VerifyUserEmail, LoginUserView, PasswordResetConfirm, 
-    PasswordResetRequestView, SetNewPassword, LogoutUserView, VerifyUserView, 
+    RegisterUserView, VerifyUserEmail, LoginUserView, PasswordResetConfirm,
+    PasswordResetRequestView, SetNewPassword, LogoutUserView, VerifyUserView,
     CSRFTokenView, CookieTokenRefreshView, get_user_profile_data, MeView, ProfileUpdateView, presign_image_upload, presign_profile_upload, toggleFollow, resend_otp, check_email_availability,
-    post_list_create, get_user_posts, post_detail, summarize_post, get_my_posts, get_countries_for_posts, 
+    post_list_create, get_user_posts, post_detail, summarize_post, get_my_posts, get_countries_for_posts,
     get_countries_with_posts, get_country_previews, get_cities_by_country, get_cities_with_posts_by_country,
+    # Recommendation views
+    recommendation_category_list, post_recommendations_list_create, post_recommendation_detail, post_recommendations_bulk_create,
     # Thread views
     thread_category_list, thread_category_detail, thread_subcategory_list,
     thread_list_create, get_user_threads, thread_detail, get_my_threads,
@@ -49,6 +51,12 @@ urlpatterns = [
     path('my-posts/', get_my_posts, name='my-posts'),  # GET: Current user's posts (including drafts)
     # POST: Summarize post content
     path('posts/<int:post_id>/summarize/', summarize_post, name='post-summarize'),
+    # Post Recommendations
+    path('recommendation-categories/', recommendation_category_list, name='recommendation-category-list'), # GET: List all recommendation categories
+    path('posts/<int:post_id>/recommendations/', post_recommendations_list_create, name='post-recommendations-list-create'),
+    path('posts/<int:post_id>/recommendations/bulk/', post_recommendations_bulk_create, name='post-recommendations-bulk-create'),
+    path('recommendations/<int:recommendation_id>/', post_recommendation_detail, name='post-recommendation-detail'), # GET/PUT/PATCH/DELETE specific recommendation
+
     path('profile/<str:username>/posts/', get_user_posts, name='user-posts'),  # GET: User's published posts
     path('profile/<str:username>/posts/<slug:slug>/', post_detail, name='post-detail'),  # GET/PUT/PATCH/DELETE: Specific post
 

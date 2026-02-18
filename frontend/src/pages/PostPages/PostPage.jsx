@@ -8,7 +8,8 @@ import { isEditorJsContent } from '../../utils/editorUtils';
 import { toast } from 'sonner';
 import dayjs from 'dayjs';
 import { getFlagEmoji } from '../../utils/countryUtils';
-import { MapPin, Flag, Globe, FileText, ChevronLeft, Edit, Trash2 } from 'lucide-react';
+import { MapPin, Flag, Globe, FileText, ChevronLeft, Edit, Trash2, ExternalLink, Star } from 'lucide-react';
+import ExternalLinkModal from '../../components/ui/ExternalLinkModal';
 
 /**
  * PostPage Component
@@ -36,6 +37,7 @@ const PostPage = () => {
   const [deleting, setDeleting] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summaryError, setSummaryError] = useState('');
+  const [pendingExternalUrl, setPendingExternalUrl] = useState(null);
 
   // Load post data
   useEffect(() => {
@@ -295,12 +297,16 @@ const PostPage = () => {
   return (
     <div className="min-h-screen bg-[var(--color-background-snow)] font-ui">
       <div className="pt-20 pb-16 px-4">
-        <div className="max-w-4xl mx-auto">
-          
+        <div className={`mx-auto ${post?.recommendations?.length > 0 ? 'max-w-6xl' : 'max-w-4xl'}`}>
+
           {/* Breadcrumbs */}
           <div className="mb-6">
             <Breadcrumbs post={post} />
           </div>
+
+          <div className={post?.recommendations?.length > 0 ? 'lg:grid lg:grid-cols-[1fr_320px] lg:gap-8' : ''}>
+            {/* Main Content Column */}
+            <div>
 
           {/* Post Container */}
           <article className="bg-[var(--color-white)] rounded-card shadow-card overflow-hidden">
@@ -440,7 +446,7 @@ const PostPage = () => {
           </article>
 
           {/* Navigation Buttons */}
-          <div className="mt-8 flex justify-between items-center">      
+          <div className="mt-8 flex justify-between items-center">
             <button
               onClick={() => navigate(-1)}
               className="flex items-center gap-2 text-[var(--primary-color-royal)] hover:text-[var(--primary-color-royal-600)] font-medium transition-colors"
@@ -448,8 +454,95 @@ const PostPage = () => {
               <ChevronLeft className="w-5 h-5" /> Back
             </button>
           </div>
+            </div>
+
+            {/* Recommendations Sidebar */}
+            {post?.recommendations?.length > 0 && (
+              <aside className="lg:sticky lg:top-24 lg:self-start mt-8 lg:mt-0">
+                <div className="bg-[var(--color-white)] rounded-card shadow-card p-6">
+                  <h2 className="text-lg font-bold text-[var(--text-color-ink)] mb-4 font-editorial">
+                    Recommendations
+                  </h2>
+                  <div className="space-y-4">
+                    {post.recommendations.map((rec) => (
+                      <div key={rec.id} className="border-b border-[var(--border-color-line)] pb-4 last:border-b-0 last:pb-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="font-semibold text-[var(--text-color-ink)] text-sm">
+                            {rec.title}
+                          </h3>
+                          {rec.category_name && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[var(--color-background-snow)] text-[var(--text-color-ink-400)] whitespace-nowrap">
+                              {rec.category_name}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Rating + Price */}
+                        <div className="flex items-center gap-3 mt-1">
+                          {rec.rating > 0 && (
+                            <div className="flex items-center gap-0.5">
+                              {[1, 2, 3, 4, 5].map(star => (
+                                <Star
+                                  key={star}
+                                  className={`w-3.5 h-3.5 ${star <= rec.rating ? 'text-yellow-400' : 'text-gray-200'}`}
+                                  fill={star <= rec.rating ? 'currentColor' : 'none'}
+                                />
+                              ))}
+                            </div>
+                          )}
+                          {rec.price_level && (
+                            <span className="text-xs font-medium text-green-700">
+                              {rec.price_level}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Note */}
+                        {rec.note && (
+                          <p className="text-sm text-[var(--text-color-ink-400)] mt-2 leading-relaxed">
+                            {rec.note}
+                          </p>
+                        )}
+
+                        {/* Links */}
+                        <div className="flex gap-3 mt-2">
+                          {rec.url && (
+                            <button
+                              type="button"
+                              onClick={() => setPendingExternalUrl(rec.url)}
+                              className="inline-flex items-center gap-1 text-xs text-[var(--primary-color-royal)] hover:underline cursor-pointer"
+                            >
+                              <ExternalLink className="w-3 h-3" /> Website
+                            </button>
+                          )}
+                          {rec.google_maps_url && (
+                            <button
+                              type="button"
+                              onClick={() => setPendingExternalUrl(rec.google_maps_url)}
+                              className="inline-flex items-center gap-1 text-xs text-[var(--primary-color-royal)] hover:underline cursor-pointer"
+                            >
+                              <MapPin className="w-3 h-3" /> Map
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </aside>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* External Link Confirmation Modal */}
+      {pendingExternalUrl && (
+        <ExternalLinkModal
+          url={pendingExternalUrl}
+          onConfirm={() => setPendingExternalUrl(null)}
+          onCancel={() => setPendingExternalUrl(null)}
+        />
+      )}
     </div>
   );
 };

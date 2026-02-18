@@ -3,8 +3,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useState, useCallback, useRef } from "react";
 import { getPostSchema, transformPostData } from './validationSchema';
 import LocationSelector from './LocationSelector';
+import RecommendationForm from './RecommendationForm';
 import postService from '../../services/postService';
 import BlockEditor from './BlogEditor/BlockEditor';
+import { toast } from 'sonner';
 
 /*
 UseCallback is used to memoize the handlers for country and city changes.
@@ -15,6 +17,10 @@ const Form = ({ onSuccess, initialData = null, isEditing = false, showTitle = tr
   const [submitError, setSubmitError] = useState('');
   const [contentError, setContentError] = useState('');
   const editorRef = useRef(null); // Ref to access editor methods 
+  const recommendationRef = useRef(null);
+  const [showRecommendations, setShowRecommendations] = useState(
+    initialData?.recommendations?.length > 0 || false
+  );
 
   const schema = getPostSchema();
 
@@ -103,8 +109,8 @@ const Form = ({ onSuccess, initialData = null, isEditing = false, showTitle = tr
         setContentError('Content is required');
         return;
       }
-      
-      formData.content = JSON.stringify(editorData); // Now con
+
+      formData.content = JSON.stringify(editorData);
     }
 
     setIsSubmitting(true);
@@ -113,7 +119,7 @@ const Form = ({ onSuccess, initialData = null, isEditing = false, showTitle = tr
     try {
       // Transform data before sending to backend
       const transformedData = transformPostData(formData);
-      
+
       let result;
       if (isEditing && initialData) {
         result = await postService.updatePost(
@@ -126,8 +132,36 @@ const Form = ({ onSuccess, initialData = null, isEditing = false, showTitle = tr
       }
 
       if (result.success) {
+        const savedPost = result.data;
+
+        // Handle recommendations
+        if (showRecommendations && recommendationRef.current?.hasData()) {
+          const recsData = recommendationRef.current.getData();
+
+          // If editing, delete existing recommendations first
+          if (isEditing && initialData?.recommendations?.length > 0) {
+            for (const existing of initialData.recommendations) {
+              await postService.deleteRecommendation(existing.id);
+            }
+          }
+
+          // Bulk create the new recommendations if there are any recommendations to add
+          if (recsData.length > 0) {
+            const cleanedRecs = recsData.map(({ _tempId, id, created_at, updated_at, post, category_name, category_slug, ...rest }) => rest);
+            const recResult = await postService.bulkCreateRecommendations(savedPost.id, cleanedRecs);
+            if (!recResult.success) {
+              toast.warning('Post saved, but some recommendations failed to save.');
+            }
+          }
+        } else if (isEditing && !showRecommendations && initialData?.recommendations?.length > 0) {
+          // Toggle turned off during edit -- delete all existing recommendations
+          for (const existing of initialData.recommendations) {
+            await postService.deleteRecommendation(existing.id);
+          }
+        }
+
         if (onSuccess) {
-          onSuccess(result.data);
+          onSuccess(savedPost);
         }
         if (!isEditing) {
           reset();
@@ -135,6 +169,10 @@ const Form = ({ onSuccess, initialData = null, isEditing = false, showTitle = tr
           if (editorRef.current) {
             editorRef.current.clear();
           }
+          if (recommendationRef.current) {
+            recommendationRef.current.clear();
+          }
+          setShowRecommendations(false);
         }
       } else {
         // Handle backend validation errors
@@ -142,11 +180,11 @@ const Form = ({ onSuccess, initialData = null, isEditing = false, showTitle = tr
           // Map backend errors to form fields
           Object.keys(result.error).forEach(field => {
             if (field in formData) {
-              setError(field, { 
-                type: 'server', 
-                message: Array.isArray(result.error[field]) 
-                  ? result.error[field][0] 
-                  : result.error[field] 
+              setError(field, {
+                type: 'server',
+                message: Array.isArray(result.error[field])
+                  ? result.error[field][0]
+                  : result.error[field]
               });
             }
           });
@@ -172,6 +210,11 @@ const Form = ({ onSuccess, initialData = null, isEditing = false, showTitle = tr
     if (editorRef.current) {
       editorRef.current.clear();
     }
+    // Clear recommendations
+    if (recommendationRef.current) {
+      recommendationRef.current.clear();
+    }
+    setShowRecommendations(false);
   }, [reset, clearErrors]);
 
   // Parse initial content for editor (if editing)
@@ -289,6 +332,40 @@ const Form = ({ onSuccess, initialData = null, isEditing = false, showTitle = tr
             <p className="mt-1 text-sm text-red-600">
               {errors.content?.message || contentError}
             </p>
+          )}
+        </div>
+
+        {/* Recommendations Toggle */}
+        <div className="border-t border-[var(--border-color-line)] pt-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <label className="text-sm font-medium text-[var(--text-color-ink)]">
+                Recommendations
+              </label>
+              <p className="text-xs text-[var(--text-color-ink-400)] mt-1">
+                Add places, services, or activities you would like to recommend
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowRecommendations(!showRecommendations)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                showRecommendations ? 'bg-[var(--primary-color-royal)]' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  showRecommendations ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {showRecommendations && (
+            <RecommendationForm
+              ref={recommendationRef}
+              initialRecommendations={initialData?.recommendations || []}
+            />
           )}
         </div>
 

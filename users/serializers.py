@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Profile, Post, PostSummary, ThreadCategory, ThreadSubcategory, Thread, ThreadReply
+from .models import User, Profile, Post, PostSummary, RecommendationCategory, PostRecommendation, ThreadCategory, ThreadSubcategory, Thread, ThreadReply
 from django.contrib.auth import authenticate
 from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
@@ -392,6 +392,9 @@ class PostDetailSerializer(PostSerializer):
     summary_text = serializers.SerializerMethodField()
     summary_status = serializers.SerializerMethodField()
     summary_generated_at = serializers.SerializerMethodField()
+    # Get all recommendations related to the post. We use SerializerMethodField because we need to serialize the related PostRecommendation objects using a separate serializer
+    # and include the category name and slug from the related RecommendationCategory model.
+    recommendations = serializers.SerializerMethodField() 
 
     def _get_summary_obj(self, obj):
         try:
@@ -411,9 +414,46 @@ class PostDetailSerializer(PostSerializer):
         summary_obj = self._get_summary_obj(obj)
         return summary_obj.generated_at if summary_obj else None
 
+    def get_recommendations(self, obj):
+        recommendations = obj.recommendations.select_related('category').all()
+        return PostRecommendationSerializer(recommendations, many=True, context=self.context).data
+
     class Meta(PostSerializer.Meta):
-        fields = PostSerializer.Meta.fields + ['summary_text', 'summary_status', 'summary_generated_at']
-        read_only_fields = PostSerializer.Meta.read_only_fields + ['summary_text', 'summary_status', 'summary_generated_at']
+        fields = PostSerializer.Meta.fields + ['summary_text', 'summary_status', 'summary_generated_at', 'recommendations']
+        read_only_fields = PostSerializer.Meta.read_only_fields + ['summary_text', 'summary_status', 'summary_generated_at', 'recommendations']
+
+
+class RecommendationCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RecommendationCategory
+        fields = ['id', 'name', 'slug', 'icon', 'display_order', 'is_active']
+        read_only_fields = ['slug']
+
+
+class PostRecommendationSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    category_slug = serializers.CharField(source='category.slug', read_only=True)
+
+    class Meta:
+        model = PostRecommendation
+        fields = [
+            'id', 'post', 'title', 'category', 'category_name', 'category_slug',
+            'url', 'google_maps_url', 'rating', 'price_level', 'note',
+            'display_order', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'post', 'created_at', 'updated_at']
+
+    def validate_rating(self, value):
+        if value < 0 or value > 5:
+            raise serializers.ValidationError("Rating must be between 0 and 5.")
+        return value
+
+    """Custom create method to ensure model validation is called when creating a recommendation"""
+    def create(self, validated_data):
+        recommendation = PostRecommendation(**validated_data)
+        recommendation.full_clean()
+        recommendation.save()
+        return recommendation
 
 
 # Thread Serializers

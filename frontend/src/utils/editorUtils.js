@@ -53,27 +53,34 @@ export const getTextPreview = (content, maxLength = 200) => {
     return '';
   }
   
+  // Decode HTML entities (e.g. &nbsp; &amp; &lt;) into plain characters
+  const decodeEntities = (str) => {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = str;
+    return textarea.value;
+  };
+
   let text = '';
-  
+
   for (const block of data.blocks) {
     if (text.length >= maxLength) break;
-    
+
     if (block.type === 'paragraph' || block.type === 'header') {
-      // Strip HTML tags from text
-      const plainText = block.data?.text?.replace(/<[^>]*>/g, '') || '';
+      // Strip HTML tags then decode entities
+      const plainText = decodeEntities(block.data?.text?.replace(/<[^>]*>/g, '') || '');
       text += plainText + ' ';
     } else if (block.type === 'list') {
       // Extract text from list items
       const items = block.data?.items || [];
       for (const item of items) {
-        const itemText = typeof item === 'string' 
-          ? item 
+        const itemText = typeof item === 'string'
+          ? item
           : item.content || '';
-        text += itemText.replace(/<[^>]*>/g, '') + ' ';
+        text += decodeEntities(itemText.replace(/<[^>]*>/g, '')) + ' ';
       }
     }
   }
-  
+
   text = text.trim();
   return text.length > maxLength 
     ? text.substring(0, maxLength) + '...' 

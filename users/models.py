@@ -262,6 +262,71 @@ class PostSummary(models.Model):
         return f"Summary for post {self.post_id} ({self.status})"
 
 
+class RecommendationCategory(models.Model):
+    """Dynamic categories for post recommendations (like acommodation, activity, and others) only admins can change."""
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(unique=True, max_length=200, blank=True)
+    icon = models.CharField(max_length=50, blank=True, default="")
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['display_order', 'name']
+        verbose_name_plural = "Recommendation Categories"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
+class PostRecommendation(models.Model):
+    """User-generated recommendations related to a post. Includes, title, category, optional URL, rating, price level, and note."""
+
+    class PriceLevel(models.TextChoices):
+        BUDGET = "$", "$"
+        MODERATE = "$$", "$$"
+        PREMIUM = "$$$", "$$$"
+        LUXURY = "$$$$", "$$$$"
+
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='recommendations')
+    title = models.CharField(max_length=200)
+    category = models.ForeignKey(
+        RecommendationCategory,
+        on_delete=models.PROTECT,
+        related_name='recommendations'
+    )
+    url = models.URLField(max_length=500, blank=True, default="")
+    google_maps_url = models.URLField(max_length=500, blank=True, default="")
+    rating = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Rating from 1-5, 0 means no rating"
+    )
+    price_level = models.CharField(
+        max_length=4,
+        choices=PriceLevel.choices,
+        blank=True,
+        default=""
+    )
+    note = models.CharField(max_length=500, blank=True, default="")
+    display_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['display_order', 'created_at']
+
+    def clean(self):
+        if self.rating > 5:
+            raise ValidationError("Rating must be between 0 and 5.")
+
+    def __str__(self):
+        return f"{self.title} ({self.category.name}) - {self.post.title}"
+
+
 '''
 Threads/Discussion models 
 '''

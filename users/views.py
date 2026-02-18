@@ -1,14 +1,15 @@
 from django.shortcuts import render
 from rest_framework.generics import GenericAPIView
-from .serializers import (LoginSerializer, UserRegisterSerializer, PasswordResetRequestSerializer, 
+from .serializers import (LoginSerializer, UserRegisterSerializer, PasswordResetRequestSerializer,
                           SetNewPasswordSerializer, LogoutUserSerializer, ProfileSerializer, ProfileUpdateSerializer, PostSerializer, PostDetailSerializer,
+                          RecommendationCategorySerializer, PostRecommendationSerializer,
                           ThreadCategorySerializer, ThreadSubcategorySerializer, ThreadSerializer, ThreadReplySerializer, UserSearchSerializer)
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from .utils import send_code_via_email
-from .models import OneTimePassword, User, Profile, Post, PostSummary, ThreadCategory, ThreadSubcategory, Thread, ThreadReply
+from .models import OneTimePassword, User, Profile, Post, PostSummary, RecommendationCategory, PostRecommendation, ThreadCategory, ThreadSubcategory, Thread, ThreadReply
 from .extract_text_for_ai import extract_text_from_editorjs, compute_content_hash
 from .ai_summarizer import summarize_with_gemini, SummaryGenerationError
 from django.utils.http import urlsafe_base64_decode
@@ -732,6 +733,8 @@ def post_detail(request, username, slug):
         # Get the post by username and slug
         post = Post.objects.select_related(
             'user__profile', 'primary_city', 'summary',
+        ).prefetch_related(
+            'recommendations__category'
         ).get(user__profile__username=username, slug=slug)
         
         # Check permissions for viewing
@@ -929,6 +932,129 @@ def summarize_post(request, post_id):
         'request_id': request_id,
         'source': 'generated',
     }, status=status.HTTP_200_OK)
+
+
+# RECOMMENDATION VIEWS
+@api_view(['GET'])
+def recommendation_category_list(request):
+    """Get all active recommendation categories"""
+    categories = RecommendationCategory.objects.filter(is_active=True)
+    serializer = RecommendationCategorySerializer(categories, many=True, context={'request': request})
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET', 'POST'])
+def post_recommendations_list_create(request, post_id):
+    """
+    GET: List all recommendations for a post (public)
+    POST: Create a new recommendation (only for post author)
+    """
+    try:
+        post = Post.objects.select_related('user').get(id=post_id)
+    except Post.DoesNotExist:
+        return Response({'error': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'GET':
+        recommendations = PostRecommendation.objects.filter(
+            post=post
+        ).select_related('category').order_by('display_order', 'created_at')
+        serializer = PostRecommendationSerializer(recommendations, many=True, context={'request': request})
+        return Response({
+            'recommendations': serializer.data,
+            'count': len(serializer.data)
+        }, status=status.HTTP_200_OK)
+
+    elif request.method == 'POST':
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if request.user != post.user:
+            return Response({'error': 'Only the post author can add recommendations'}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = PostRecommendationSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save(post=post)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
+def post_recommendation_detail(request, recommendation_id):
+    """
+    GET: Retrieve a specific recommendation
+    (Only post authors can update or delete their recommendations, but anyone can view them as part of the post details)
+    PUT/PATCH: Update a recommendation
+    DELETE: Delete a recommendation
+    """
+    try:
+        recommendation = PostRecommendation.objects.select_related('post__user', 'category').get(id=recommendation_id)
+    except PostRecommendation.DoesNotExist:
+        return Response({'error': 'Recommendation not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'GET':
+        serializer = PostRecommendationSerializer(recommendation, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    if not request.user.is_authenticated:
+        return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    if request.user != recommendation.post.user:
+        return Response({'error': 'Only the post author can modify recommendations'}, status=status.HTTP_403_FORBIDDEN)
+
+    if request.method in ['PUT', 'PATCH']:
+        partial = request.method == 'PATCH'
+        serializer = PostRecommendationSerializer(
+            recommendation, data=request.data, partial=partial, context={'request': request}
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    elif request.method == 'DELETE':
+        recommendation.delete()
+        return Response({'message': 'Recommendation deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def post_recommendations_bulk_create(request, post_id):
+    """
+    This create multiple recommendations for a post in a single request.
+    """
+    try:
+        post = Post.objects.select_related('user').get(id=post_id)
+    except Post.DoesNotExist:
+        return Response({'error': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.user != post.user:
+        return Response({'error': 'Only the post author can add recommendations'}, status=status.HTTP_403_FORBIDDEN)
+
+    recommendations_data = request.data.get('recommendations', [])
+    if not recommendations_data:
+        return Response({'error': 'No recommendations provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+    created = []
+    errors_list = []
+    for i, rec_data in enumerate(recommendations_data):
+        serializer = PostRecommendationSerializer(data=rec_data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save(post=post)
+            created.append(serializer.data)
+        else:
+            errors_list.append({'index': i, 'errors': serializer.errors})
+
+    if errors_list:
+        return Response({
+            'created': created,
+            'errors': errors_list,
+            'message': f'{len(created)} created, {len(errors_list)} failed'
+        }, status=status.HTTP_207_MULTI_STATUS)
+
+    return Response({
+        'recommendations': created,
+        'count': len(created)
+    }, status=status.HTTP_201_CREATED)
 
 
 @api_view(['GET'])

@@ -182,24 +182,16 @@ const CountryPage = () => {
                   </button>
                 </div>
               ) : (
-                <div className="bg-white] shadow-md rounded-lg p-6 hover:shadow-xl  transition-shadow max-w-2xl mx-auto text-center">
+                <div className="bg-white shadow-md rounded-lg p-6 hover:shadow-xl transition-shadow max-w-2xl mx-auto text-center">
                   <p className="text-[var(--text-color-ink-400)] mb-4">
                     Be the first to start a discussion!
                   </p>
                   <button
                     onClick={() => navigate('/create-thread')}
                     className="bg-[var(--primary-color-royal)] text-white px-6 py-3 rounded-input font-semibold hover:bg-[var(--primary-color-royal-600)] transition-colors"
-                    >
-                      Create a Discussion Thread
-                    </button>
-                  {user && (
-                    <button
-                      onClick={() => navigate(`/countries/${countryCode}/threads/new`)}
-                      className="bg-[var(--primary-color-royal)] text-white px-6 py-3 rounded-input font-semibold hover:bg-[var(--primary-color-royal-600)] transition-colors"
-                    >
-                      Read Discussion Posts about {countryName}
-                    </button>
-                  )}
+                  >
+                    Create a Discussion
+                  </button>
                 </div>
               )}
             </div>
