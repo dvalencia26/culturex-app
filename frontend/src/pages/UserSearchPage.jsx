@@ -115,7 +115,7 @@ const UserSearchPage = () => {
               value={searchQuery}
               onSearch={handleSearch}
               placeholder="Search by name or username..."
-              loading={loading}
+              loading={false}
             />
           </div>
 

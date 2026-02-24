@@ -79,7 +79,6 @@ const Login = () => {
         <h1 className="text-[var(--primary-color-royal)] text-center mb-10 tracking-wide text-4xl font-extrabold drop-shadow-lg font-editorial">Welcome Back</h1>
 
         <form onSubmit={handleSubmit} className="w-full flex flex-col gap-7">
-          {isLoading && <p className="text-[var(--text-color-ink)] text-center mb-4 font-medium">Logging in...</p>}
           <div>
             <label htmlFor="email" className="text-[var(--text-color-ink)] font-semibold block mb-2 text-lg">Email</label>
             <input 

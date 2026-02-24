@@ -10,8 +10,8 @@ const Signup = () => {
   const location = useLocation();
   const { register, googleAuth, isLoading } = useAuth();
 
-  // Get the redirect path from location state, default to profile for new users 
-  const from = location.state?.from || '/profile';
+  // Get the redirect path from location state, default to home
+  const from = location.state?.from || '/';
   
   const [formData, setFormData] = useState({
     email: '',

@@ -31,7 +31,7 @@ const ThreadPage = () => {
   const [selectedSubcategory, setSelectedSubcategory] = useState(searchParams.get('subcategory') || '');
 
   // Loading states
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [showLoading, setShowLoading] = useState(false); // For delayed loader display
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [loadingSubcategories, setLoadingSubcategories] = useState(false);
@@ -318,10 +318,10 @@ const ThreadPage = () => {
                 </h2>
               </div>
 
-              {/* Loading State */}
-              {showLoading && threads.length === 0 ? (
-                <Loader message='Loading...' />
-              
+              {/* Loading / Empty / Thread List */}
+              {loading && threads.length === 0 ? (
+                showLoading ? <Loader message='Loading...' /> : null
+
               ) : threads.length > 0 ? (
                 /* Thread Cards */
                 <div className="space-y-6">
