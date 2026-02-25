@@ -9,6 +9,7 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { getFlagEmoji } from "../../utils/countryUtils";
 import { Pin, Lock, MessageSquare, Eye, ChevronLeft } from "lucide-react";
+import ShareButton from "../../components/ui/ShareButton";
 
 dayjs.extend(relativeTime);
 
@@ -254,24 +255,34 @@ const ThreadDetailPage = () => {
                 </div>
               </div>
 
-              {/* Edit/Delete Buttons for Author */}
-              {isAuthor && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleEdit}
-                    disabled={thread.is_locked}
-                    className="px-4 py-2 text-sm font-medium text-[var(--primary-color-royal)] border border-[var(--primary-color-royal)] rounded-input hover:bg-[var(--primary-color-royal)] hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    className="px-4 py-2 text-sm font-medium text-red-600 border border-red-600 rounded-input hover:bg-red-600 hover:text-white transition-colors"
-                  >
-                    Delete
-                  </button>
-                </div>
-              )}
+              {/* Action Buttons */}
+              <div className="flex gap-2">
+                {/* Share Button */}
+                <ShareButton 
+                  text={thread.title}
+                  contentType="thread"
+                  contentId={thread.id}
+                />
+
+                {/* Edit/Delete Buttons for Author */}
+                {isAuthor && (
+                  <>
+                    <button
+                      onClick={handleEdit}
+                      disabled={thread.is_locked}
+                      className="px-4 py-2 text-sm font-medium text-[var(--primary-color-royal)] border border-[var(--primary-color-royal)] rounded-input hover:bg-[var(--primary-color-royal)] hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      className="px-4 py-2 text-sm font-medium text-red-600 border border-red-600 rounded-input hover:bg-red-600 hover:text-white transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Content */}

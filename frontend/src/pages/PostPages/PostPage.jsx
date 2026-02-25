@@ -10,6 +10,7 @@ import dayjs from 'dayjs';
 import { getFlagEmoji } from '../../utils/countryUtils';
 import { MapPin, Flag, Globe, FileText, ChevronLeft, Edit, Trash2, ExternalLink, Star } from 'lucide-react';
 import ExternalLinkModal from '../../components/ui/ExternalLinkModal';
+import ShareButton from '../../components/ui/ShareButton';
 
 /**
  * PostPage Component
@@ -323,7 +324,7 @@ const PostPage = () => {
                 {post.title}
               </h1>
 
-              {/* Author Info */}
+              {/* Author Info & Actions */}
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center space-x-4">
                   {/* Author Avatar */}
@@ -361,24 +362,34 @@ const PostPage = () => {
                   </div>
                 </div>
 
-                {/* Edit/Delete Buttons (if author) */}
-                {isAuthor && (
-                  <div className="flex space-x-3">
-                    <button
-                      onClick={handleEdit}
-                      className="flex items-center gap-2 px-4 py-2 border border-[var(--primary-color-royal)] text-[var(--primary-color-royal)] rounded-input font-medium hover:bg-[var(--primary-color-royal)] hover:text-white transition-colors"
-                    >
-                      <Edit className="w-4 h-4" /> Edit
-                    </button>
-                    <button
-                      onClick={handleDelete}
-                      disabled={deleting}
-                      className="flex items-center gap-2 px-4 py-2 border border-red-500 text-red-500 rounded-input font-medium hover:bg-red-500 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Trash2 className="w-4 h-4" /> {deleting ? 'Deleting...' : 'Delete'}
-                    </button>
-                  </div>
-                )}
+                {/* Action Buttons */}
+                <div className="flex items-center space-x-3">
+                  {/* Share Button */}
+                  <ShareButton 
+                    text={post.title} 
+                    contentType="post"
+                    contentId={post.id}
+                  />
+                  
+                  {/* Edit/Delete Buttons (author only) */}
+                  {isAuthor && (
+                    <>
+                      <button
+                        onClick={handleEdit}
+                        className="flex items-center gap-2 px-4 py-2 border border-[var(--primary-color-royal)] text-[var(--primary-color-royal)] rounded-input font-medium hover:bg-[var(--primary-color-royal)] hover:text-white transition-colors"
+                      >
+                        <Edit className="w-4 h-4" /> Edit
+                      </button>
+                      <button
+                        onClick={handleDelete}
+                        disabled={deleting}
+                        className="flex items-center gap-2 px-4 py-2 border border-red-500 text-red-500 rounded-input font-medium hover:bg-red-500 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 className="w-4 h-4" /> {deleting ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
 
               {post.status === 'published' && (

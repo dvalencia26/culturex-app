@@ -20,6 +20,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.http import JsonResponse
 from django.db import connection
+from users.share_views import ShareLinkRedirectView
 
 
 def health_check(request):
@@ -40,6 +41,7 @@ def health_check(request):
 
 urlpatterns = [
     path('health/', health_check, name='health_check'),
+    path('s/<str:code>/', ShareLinkRedirectView.as_view(), name='share-link-redirect'),  # Share links with OG tags
     path('admin/', admin.site.urls),
     path('api/v1/auth/', include('users.urls')),  # Include URLs from the users app
     path('api/v1/auth/', include('socials_auth.urls')),  # Include URLs from the socials_auth app

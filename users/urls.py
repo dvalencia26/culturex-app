@@ -15,6 +15,7 @@ from .views import (
     thread_reply_list_create, thread_reply_detail, get_nested_replies,
     popular_countries, get_all_countries, search_users,
 )
+from .share_views import CreateShareLinkView
 
 urlpatterns = [
     # User Registration & Email Verification
@@ -89,4 +90,6 @@ urlpatterns = [
     path('thread-replies/<int:reply_id>/', thread_reply_detail, name='thread-reply-detail'),  # GET/PUT/PATCH/DELETE: Specific reply
     path('thread-replies/<int:reply_id>/nested/', get_nested_replies, name='nested-replies'),  # GET: Nested replies
 
+    # Share Links
+    path('share/<str:content_type>/<int:content_id>/', CreateShareLinkView.as_view(), name='create-share-link'),
 ]

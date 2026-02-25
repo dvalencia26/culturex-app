@@ -10,6 +10,7 @@ from django.core.exceptions import ValidationError
 
 
 import re
+import secrets
 
 
 AUTH_PROVIDERS = {'email': 'email', 'google': 'google', 'facebook': 'facebook'}
@@ -513,3 +514,53 @@ class ThreadReply(models.Model):
     
     def __str__(self):
         return f"Reply by {self.author_username} on {self.thread.title}"
+
+
+class ShareLink(models.Model):
+    """Shorter sharelinks for posts/threads with meta tags"""
+    class ContentType(models.TextChoices):
+        POST = "post", "Post"
+        THREAD = "thread", "Thread"
+    
+    code = models.CharField(max_length=12, unique=True, db_index=True) # Unique code for the share link. Indexed for faster lookups
+    content_type = models.CharField(max_length=10, choices=ContentType.choices) # Thread or post
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, null=True, blank=True, related_name='share_links')
+    thread = models.ForeignKey(Thread, on_delete=models.CASCADE, null=True, blank=True, related_name='share_links')
+    click_count = models.PositiveIntegerField(default=0) # Track number of clicks on this share link
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        constraints = [
+            # Ensure that if content_type is post, then post must be set and thread must be null, and vice versa
+            models.CheckConstraint(
+                condition=(
+                    models.Q(content_type='post', post__isnull=False, thread__isnull=True) |
+                    models.Q(content_type='thread', thread__isnull=False, post__isnull=True)
+                ),
+                name='sharelink_content_integrity'
+            )
+        ]
+    
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = self.generate_unique_code()
+        super().save(*args, **kwargs)
+    
+    @staticmethod
+    def generate_unique_code():
+        """Generate a unique 8-character code (only letters and numbers)"""
+        while True:
+            code = secrets.token_urlsafe(6)[:8]
+            if not ShareLink.objects.filter(code=code).exists():
+                return code
+    
+    def get_target_url(self):
+        """Get the URL from the frontend for this content"""
+        if self.content_type == 'post' and self.post:
+            return self.post.get_absolute_url()
+        elif self.content_type == 'thread' and self.thread:
+            return self.thread.get_absolute_url()
+        return '/'
+    
+    def __str__(self):
+        return f"{self.code} -> {self.content_type}"
