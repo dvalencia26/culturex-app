@@ -320,7 +320,7 @@ const ThreadPage = () => {
 
               {/* Loading / Empty / Thread List */}
               {loading && threads.length === 0 ? (
-                showLoading ? <Loader message='Loading...' /> : null
+                showLoading ? <Loader message='Loading discussions...' fullScreen={false} overlay={false} /> : null
 
               ) : threads.length > 0 ? (
                 /* Thread Cards */

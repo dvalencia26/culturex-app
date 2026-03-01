@@ -54,7 +54,7 @@ class ShareLinkRedirectView(APIView):
             
             image = extract_first_image(content.content)
             url = f"{frontend_url}{content.get_absolute_url()}"
-            author = content.user.get_full_name()
+            author = content.user.get_full_name
             
         elif share_link.content_type == 'thread' and share_link.thread:
             content = share_link.thread
@@ -62,7 +62,7 @@ class ShareLinkRedirectView(APIView):
             description = extract_text_excerpt(content.content)
             image = None  # Threads don't have images
             url = f"{frontend_url}{content.get_absolute_url()}"
-            author = content.author.get_full_name()
+            author = content.author.get_full_name
         else:
             return HttpResponseRedirect(frontend_url)
         

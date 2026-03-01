@@ -27,15 +27,24 @@ const ShareButton = ({ text, contentType, contentId }) => {
     }
   }, [isOpen, contentType, contentId]);
 
-  const message = encodeURIComponent(`${text} ${shareUrl}`);
+  // Set personalized messages based on content type and social platform
+  const siteName = "Our Routes";
+  const contentLabel = contentType === 'thread' ? 'discussion' : 'post';
+  
+  const shareMessages = {
+    whatsapp: `${text}\nRead the full ${contentLabel} on ${siteName}: ${shareUrl}`,
+    twitter: `${text}\nRead more on ${siteName}\n${shareUrl}`,
+    linkedin: shareUrl, // just need URL, LinkedIn pulls OG tags
+    facebook: shareUrl, // just need URL, Facebook pulls OG tags
+  };
 
   // Social media share handlers
   const handleWhatsAppShare = () => {
-    window.open(`https://wa.me/?text=${message}`, "_blank");
+    window.open(`https://wa.me/?text=${encodeURIComponent(shareMessages.whatsapp)}`, "_blank");
   };
 
   const handleTwitterShare = () => {
-    window.open(`https://twitter.com/intent/tweet?text=${message}`, "_blank");
+    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareMessages.twitter)}`, "_blank");
   };
 
   const handleLinkedInShare = () => {
@@ -54,7 +63,8 @@ const ShareButton = ({ text, contentType, contentId }) => {
 
   // Clipboard functionality
   const handleCopy = () => {
-    navigator.clipboard.writeText(shareUrl).then(() => {
+    const copyText = `${text} - Read on ${siteName}: ${shareUrl}`;
+    navigator.clipboard.writeText(copyText).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -127,7 +137,7 @@ const ShareButton = ({ text, contentType, contentId }) => {
             </button>
 
             <h3 className="text-[var(--text-color-ink)] font-semibold text-lg mb-4">
-              Share this post
+              Share this {contentLabel}
             </h3>
 
             {/* Social Media Grid */}
@@ -162,7 +172,11 @@ const ShareButton = ({ text, contentType, contentId }) => {
             {canNativeShare && (
               <button
                 onClick={() => {
-                  navigator.share({ title: text, url: shareUrl });
+                  navigator.share({ 
+                    title: text, 
+                    text: `Check out this ${contentLabel} on ${siteName}`,
+                    url: shareUrl 
+                  });
                   setIsOpen(false);
                 }}
                 disabled={loading || !shareUrl}

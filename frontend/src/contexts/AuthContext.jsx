@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import authService from '../services/authService';
 
@@ -25,7 +24,6 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [authInitialized, setAuthInitialized] = useState(false);
-  const navigate = useNavigate();
 
   // Initialize authentication state only once when app loads
   useEffect(() => {
@@ -51,7 +49,6 @@ export const AuthProvider = ({ children }) => {
           setProfile(null);
         }
       } else {
-        console.log('User is not authenticated');
         setUser(null);
         setProfile(null);
         setIsAuthenticated(false);
@@ -109,7 +106,6 @@ export const AuthProvider = ({ children }) => {
       setProfile(null);
       setIsAuthenticated(false);
       setIsLoading(false);
-      navigate('/login');
       toast.success('Logged out successfully!');
     }
   };
